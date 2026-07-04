@@ -309,9 +309,7 @@ void WorldSession::SendPacket(WorldPacket const* packet)
 {
     if (packet->GetOpcode() == NULL_OPCODE)
     {
-#ifndef ENABLE_PLAYERBOTS
-        LOG_ERROR("network.opcode", "{} send NULL_OPCODE", GetPlayerInfo());
-#endif
+        LOG_DEBUG("network.opcode", "{} send NULL_OPCODE", GetPlayerInfo());
         return;
     }
 
