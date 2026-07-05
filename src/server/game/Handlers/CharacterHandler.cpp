@@ -843,8 +843,8 @@ void WorldSession::HandlePlayerLoginFromDB(LoginQueryHolder const& holder)
         SendPacket(sMotdMgr->GetMotdPacket(pCurrChar->GetSession()->GetSessionDbLocaleIndex()));
 
         // send server info
-        if (sWorld->getIntConfig(CONFIG_ENABLE_SINFO_LOGIN) == 1)
-            chH.PSendSysMessage("{}", GitRevision::GetFullVersion());
+        //if (sWorld->getIntConfig(CONFIG_ENABLE_SINFO_LOGIN) == 1)
+        //    chH.PSendSysMessage("{}", GitRevision::GetFullVersion());
     }
 
     if (!sToCloud9Sidecar->ClusterModeEnabled())
