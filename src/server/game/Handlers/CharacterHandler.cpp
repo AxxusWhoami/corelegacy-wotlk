@@ -1173,8 +1173,8 @@ void WorldSession::HandlePlayerLoginToCharInWorld(Player* pCurrChar)
         SendPacket(sMotdMgr->GetMotdPacket(pCurrChar->GetSession()->GetSessionDbLocaleIndex()));
 
         // send server info
-        if (sWorld->getIntConfig(CONFIG_ENABLE_SINFO_LOGIN) == 1)
-            chH.PSendSysMessage("{}", GitRevision::GetFullVersion());
+        //if (sWorld->getIntConfig(CONFIG_ENABLE_SINFO_LOGIN) == 1)
+        //    chH.PSendSysMessage("{}", GitRevision::GetFullVersion());
 
         LOG_DEBUG("network.opcode", "WORLD: Sent server info");
     }
