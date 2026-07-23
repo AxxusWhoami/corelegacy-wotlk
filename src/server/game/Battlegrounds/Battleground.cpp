@@ -1558,7 +1558,7 @@ Creature* Battleground::GetBGCreature(uint32 type)
 {
     Creature* creature = GetBgMap()->GetCreature(BgCreatures[type]);
     if (!creature)
-        LOG_ERROR("bg.battleground", "Battleground::GetBGCreature: creature (type: {}, {}) not found for BG (map: {}, instance id: {})!",
+        LOG_DEBUG("bg.battleground", "Battleground::GetBGCreature: creature (type: {}, {}) not found for BG (map: {}, instance id: {})!",
                        type, BgCreatures[type].ToString(), m_MapId, m_InstanceID);
     return creature;
 }
@@ -1678,7 +1678,7 @@ bool Battleground::DelObject(uint32 type)
         return true;
     }
 
-    LOG_ERROR("bg.battleground", "Battleground::DelObject: gameobject (type: {}, {}) not found for BG (map: {}, instance id: {})!",
+    LOG_DEBUG("bg.battleground", "Battleground::DelObject: gameobject (type: {}, {}) not found for BG (map: {}, instance id: {})!",
                    type, BgObjects[type].ToString(), m_MapId, m_InstanceID);
 
     BgObjects[type].Clear();
