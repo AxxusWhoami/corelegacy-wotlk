@@ -3223,7 +3223,7 @@ bool Player::CheckSkillLearnedBySpell(uint32 spellId)
 
     if (errorSkill)
     {
-        LOG_ERROR("entities.player", "Player {} (GUID: {}), has spell ({}) that teach skill ({}) which is invalid for the race/class combination (Race: {}, Class: {}). Will be deleted.",
+        LOG_DEBUG("entities.player", "Player {} (GUID: {}), has spell ({}) that teach skill ({}) which is invalid for the race/class combination (Race: {}, Class: {}). Will be deleted.",
             GetName(), GetGUID().GetCounter(), spellId, errorSkill, getRace(), getClass());
 
         return false;

@@ -5806,7 +5806,7 @@ void Player::_LoadActions(PreparedQueryResult result)
             else
             {
 
-                LOG_ERROR("entities.player", "ActionButton loading problem, will be deleted from db. player: {}, guid: {}, button: {}, action: {}, type: {}", GetName(), GetGUID().GetCounter(), button, action, type);
+                LOG_DEBUG("entities.player", "ActionButton loading problem, will be deleted from db. player: {}, guid: {}, button: {}, action: {}, type: {}", GetName(), GetGUID().GetCounter(), button, action, type);
 
                 // Will deleted in DB at next save (it can create data until save but marked as deleted)
                 m_actionButtons[button].uState = ACTIONBUTTON_DELETED;
@@ -6053,7 +6053,7 @@ void Player::_LoadInventory(PreparedQueryResult result, uint32 timeDiff)
                     item->SetState(ITEM_UNCHANGED, this);
                 else
                 {
-                    LOG_ERROR("entities.player", "Player::_LoadInventory: player ({}, name: '{}') has item ({}, entry: {}) which can't be loaded into inventory (Bag GUID: {}, slot: {}) by reason {}. Item will be sent by mail.",
+                    LOG_DEBUG("entities.player", "Player::_LoadInventory: player ({}, name: '{}') has item ({}, entry: {}) which can't be loaded into inventory (Bag GUID: {}, slot: {}) by reason {}. Item will be sent by mail.",
                               GetGUID().ToString(), GetName(), item->GetGUID().ToString(), item->GetEntry(), bagGuid, slot, err);
                     item->DeleteFromInventoryDB(trans);
                     problematicItems.push_back(item);
