@@ -5342,7 +5342,13 @@ void Unit::RemoveAurasDueToSpellBySteal(uint32 spellId, ObjectGuid casterGUID, U
                             newAura->UnregisterSingleTarget();
                             // bring back single target aura status to the old aura
                             aura->SetIsSingleTarget(true);
-                            caster->GetSingleCastAuras().push_back(aura);
+
+							// FIX: Evitar corrupción de lista si el caster original está en otro hilo/mapa
+							if (caster->IsInWorld() && caster->FindMap() == stealer->FindMap())
+							{
+								caster->GetSingleCastAuras().push_back(aura);
+							}
+							
                         }
                         // FIXME: using aura->GetMaxDuration() maybe not blizzlike but it fixes stealing of spells like Innervate
                         newAura->SetLoadedState(aura->GetMaxDuration(), int32(dur), stealCharge ? 1 : aura->GetCharges(), 1, recalculateMask, &damage[0]);
