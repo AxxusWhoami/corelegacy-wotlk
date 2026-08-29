@@ -1586,7 +1586,7 @@ void Group::RemovePlayerFromRolls(ObjectGuid guid)
     if (RollId.empty())
         return;
 
-    // Replace the forward iterator loop with a backward index loop
+    // Must iterate backwards to prevent index shifting when CountRollVote deletes the roll
     for (int i = RollId.size() - 1; i >= 0; --i)
     {
         Roll* roll = RollId[i];
@@ -1594,16 +1594,14 @@ void Group::RemovePlayerFromRolls(ObjectGuid guid)
         
         if (itr2 != roll->playerVote.end())
         {
-            if (itr2->second == ROLL_PASS || itr2->second == ROLL_NEED || 
-                itr2->second == ROLL_GREED || itr2->second == ROLL_DISENCHANT)
+            // Replaced ROLL_PASS/NEED/GREED with the correct RollVote enum values
+            if (itr2->second == PASS || itr2->second == NEED || 
+                itr2->second == GREED || itr2->second == DISENCHANT)
             {
                 --roll->totalPlayersRolling;
             }
 
             roll->playerVote.erase(itr2);
-            
-            // If this call destroys the roll and erases it from RollId,
-            // the backward loop prevents the index shift from breaking the next iteration.
             CountRollVote(guid, roll->itemGUID, MAX_ROLL_TYPE);
         }
     }
