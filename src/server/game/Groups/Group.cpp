@@ -46,7 +46,7 @@
 Roll::Roll(ObjectGuid _guid, LootItem const& li) : itemGUID(_guid), itemid(li.itemid),
     itemRandomPropId(li.randomPropertyId), itemRandomSuffix(li.randomSuffix), itemCount(li.count),
     totalPlayersRolling(0), totalNeed(0), totalGreed(0), totalPass(0), itemSlot(0),
-    rollVoteMask(ROLL_ALL_TYPE_NO_DISENCHANT)
+    rollVoteMask(ROLL_ALL_TYPE_NO_DISENCHANT), isCompleted(false)
 {
 }
 
@@ -1505,11 +1505,13 @@ bool Group::CountRollVote(ObjectGuid playerGUID, ObjectGuid Guid, uint8 Choice)
         return false;
     Roll* roll = *rollI;
 
+    // Evitar procesar si la tirada ya concluyó
+    if (roll->isCompleted)
+        return false;
+
     Roll::PlayerVote::iterator itr = roll->playerVote.find(playerGUID);
-    // this condition means that player joins to the party after roll begins
-    // Xinef: if choice == MAX_ROLL_TYPE, player was removed from the map in removefromgroup
-    // Xinef: itr can be invalid as it is not used below
-    if (Choice < MAX_ROLL_TYPE && itr == roll->playerVote.end())
+    // Filtrar Use-After-Free por duplicidad de votos del mismo bot
+    if (Choice < MAX_ROLL_TYPE && (itr == roll->playerVote.end() || itr->second != NOT_EMITED_YET))
         return false;
 
     if (roll->getLoot())
@@ -1555,11 +1557,27 @@ void Group::EndRoll(Loot* pLoot)
     {
         if ((*itr)->getLoot() == pLoot)
         {
-            CountTheRoll(itr);           //i don't have to edit player votes, who didn't vote ... he will pass
-            itr = RollId.begin();
+            CountTheRoll(itr);           
+            
+            // Purgamos la memoria ya que CountTheRoll no lo hace
+            if ((*itr)->isCompleted)
+            {
+                delete *itr;
+                itr = RollId.erase(itr);
+            }
+            else
+                ++itr;
         }
         else
-            ++itr;
+        {
+            if ((*itr)->isCompleted || !(*itr)->isValid())
+            {
+                delete *itr;
+                itr = RollId.erase(itr);
+            }
+            else
+                ++itr;
+        }
     }
 }
 
@@ -1588,7 +1606,16 @@ void Group::RemovePlayerFromRolls(ObjectGuid guid)
         roll->playerVote.erase(itr2);
 
         if (CountRollVote(guid, roll->itemGUID, MAX_ROLL_TYPE))
-            it = RollId.begin();
+        {
+            // Purgamos la memoria aquí
+            if (roll->isCompleted)
+            {
+                delete roll;
+                it = RollId.erase(it);
+            }
+            else
+                it = RollId.begin();
+        }
         else
             ++it;
     }
@@ -1597,10 +1624,11 @@ void Group::RemovePlayerFromRolls(ObjectGuid guid)
 void Group::CountTheRoll(Rolls::iterator rollI)
 {
     Roll* roll = *rollI;
-    if (!roll->isValid())                                   // is loot already deleted ?
+    
+    // Si ya fue completado o es inválido, lo marcamos y retornamos en lugar de eliminarlo
+    if (!roll->isValid() || roll->isCompleted)
     {
-        RollId.erase(rollI);
-        delete roll;
+        roll->isCompleted = true;
         return;
     }
 
@@ -1610,7 +1638,7 @@ void Group::CountTheRoll(Rolls::iterator rollI)
         if (!roll->playerVote.empty())
         {
             uint8 maxresul = 0;
-            ObjectGuid maxguid; // pussywizard: start with 0 >_>
+            ObjectGuid maxguid; 
             Player* player = nullptr;
 
             for (Roll::PlayerVote::const_iterator itr = roll->playerVote.begin(); itr != roll->playerVote.end(); ++itr)
@@ -1634,7 +1662,7 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                 }
             }
 
-            if (maxguid) // pussywizard: added condition
+            if (maxguid) 
             {
                 SendLootRollWon(ObjectGuid::Empty, maxguid, maxresul, ROLL_NEED, *roll);
                 player = ObjectAccessor::FindPlayer(maxguid);
@@ -1660,8 +1688,6 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                     else
                     {
                         uint32 mailOnFull = sWorld->getIntConfig(CONFIG_LFG_MAIL_ITEM_ON_FULL_INVENTORY);
-                        // Only mail when bags are genuinely full. Unique/max-count failures must
-                        // leave the item on the corpse so it can be re-rolled or freely looted.
                         if (msg == EQUIP_ERR_INVENTORY_FULL && (mailOnFull == MAIL_ITEM_ON_FULL_INVENTORY_EVERYWHERE || (mailOnFull == MAIL_ITEM_ON_FULL_INVENTORY_LFG_ONLY && isLFGGroup())))
                         {
                             item->is_looted = true;
@@ -1683,12 +1709,12 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                 roll->totalNeed = 0;
         }
     }
-    if (roll->totalNeed == 0 && roll->totalGreed > 0) // if (roll->totalNeed == 0 && ...), not else if, because totalNeed can be decremented above when a needing player is offline
+    if (roll->totalNeed == 0 && roll->totalGreed > 0) 
     {
         if (!roll->playerVote.empty())
         {
             uint8 maxresul = 0;
-            ObjectGuid maxguid; // pussywizard: start with 0
+            ObjectGuid maxguid; 
             Player* player = nullptr;
             RollVote rollvote = NOT_VALID;
 
@@ -1715,7 +1741,7 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                 }
             }
 
-            if (maxguid) // pussywizard: added condition
+            if (maxguid) 
             {
                 SendLootRollWon(ObjectGuid::Empty, maxguid, maxresul, rollvote, *roll);
                 player = ObjectAccessor::FindPlayer(maxguid);
@@ -1744,8 +1770,6 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                         else
                         {
                             uint32 mailOnFull = sWorld->getIntConfig(CONFIG_LFG_MAIL_ITEM_ON_FULL_INVENTORY);
-                            // Only mail when bags are genuinely full. Unique/max-count failures must
-                            // leave the item on the corpse so it can be re-rolled or freely looted.
                             if (msg == EQUIP_ERR_INVENTORY_FULL && (mailOnFull == MAIL_ITEM_ON_FULL_INVENTORY_EVERYWHERE || (mailOnFull == MAIL_ITEM_ON_FULL_INVENTORY_LFG_ONLY && isLFGGroup())))
                             {
                                 item->is_looted = true;
@@ -1797,11 +1821,10 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                 roll->totalGreed = 0;
         }
     }
-    if (roll->totalNeed == 0 && roll->totalGreed == 0) // if, not else, because the totals can be decremented above when a rolling player is offline
+    if (roll->totalNeed == 0 && roll->totalGreed == 0) 
     {
         SendLootAllPassed(*roll);
 
-        // remove is_blocked so that the item is lootable by all players
         LootItem* item = &(roll->itemSlot >= roll->getLoot()->items.size() ? roll->getLoot()->quest_items[roll->itemSlot - roll->getLoot()->items.size()] : roll->getLoot()->items[roll->itemSlot]);
         if (item)
             item->is_blocked = false;
@@ -1812,13 +1835,12 @@ void Group::CountTheRoll(Rolls::iterator rollI)
         GameObjectTemplate const* goInfo = loot->sourceGameObject->GetGOInfo();
         if (goInfo && goInfo->type == GAMEOBJECT_TYPE_CHEST)
         {
-            // Deactivate chest if the last item was rolled in group
             loot->sourceGameObject->SetLootState(GO_JUST_DEACTIVATED);
         }
     }
 
-    RollId.erase(rollI);
-    delete roll;
+    // ELIMINACIÓN DIFERIDA: Solo lo marcamos como completado
+    roll->isCompleted = true;
 }
 
 void Group::SetTargetIcon(uint8 id, ObjectGuid whoGuid, ObjectGuid targetGuid)
@@ -2675,10 +2697,24 @@ bool Group::isRollLootActive() const
 
 Group::Rolls::iterator Group::GetRoll(ObjectGuid Guid)
 {
-    Rolls::iterator iter;
-    for (iter = RollId.begin(); iter != RollId.end(); ++iter)
-        if ((*iter)->itemGUID == Guid && (*iter)->isValid())
+    Rolls::iterator iter = RollId.begin();
+    while (iter != RollId.end())
+    {
+        // Limpiamos los punteros completados o inválidos silenciosamente
+        if ((*iter)->isCompleted || !(*iter)->isValid())
+        {
+            delete *iter;
+            iter = RollId.erase(iter);
+        }
+        else if ((*iter)->itemGUID == Guid)
+        {
             return iter;
+        }
+        else
+        {
+            ++iter;
+        }
+    }
     return RollId.end();
 }
 
