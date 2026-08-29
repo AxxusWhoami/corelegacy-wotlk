@@ -169,6 +169,7 @@ public:
     uint8 totalPass;
     uint8 itemSlot;
     uint8 rollVoteMask;
+    bool isCompleted; // IMPLEMENTACIÓN DE ELIMINACIÓN DIFERIDA
 };
 
 /** request member stats checken **/
