@@ -1583,41 +1583,29 @@ void Group::EndRoll(Loot* pLoot)
 
 void Group::RemovePlayerFromRolls(ObjectGuid guid)
 {
-    for (Rolls::iterator it = RollId.begin(); it != RollId.end();)
+    if (RollId.empty())
+        return;
+
+    // Replace the forward iterator loop with a backward index loop
+    for (int i = RollId.size() - 1; i >= 0; --i)
     {
-        Roll* roll = *it;
+        Roll* roll = RollId[i];
         Roll::PlayerVote::iterator itr2 = roll->playerVote.find(guid);
-        if (itr2 == roll->playerVote.end())
+        
+        if (itr2 != roll->playerVote.end())
         {
-            ++it;
-            continue;
-        }
-
-        if (itr2->second == GREED || itr2->second == DISENCHANT)
-            --roll->totalGreed;
-        else if (itr2->second == NEED)
-            --roll->totalNeed;
-        else if (itr2->second == PASS)
-            --roll->totalPass;
-
-        if (itr2->second != NOT_VALID)
-            --roll->totalPlayersRolling;
-
-        roll->playerVote.erase(itr2);
-
-        if (CountRollVote(guid, roll->itemGUID, MAX_ROLL_TYPE))
-        {
-            // Purgamos la memoria aquí
-            if (roll->isCompleted)
+            if (itr2->second == ROLL_PASS || itr2->second == ROLL_NEED || 
+                itr2->second == ROLL_GREED || itr2->second == ROLL_DISENCHANT)
             {
-                delete roll;
-                it = RollId.erase(it);
+                --roll->totalPlayersRolling;
             }
-            else
-                it = RollId.begin();
+
+            roll->playerVote.erase(itr2);
+            
+            // If this call destroys the roll and erases it from RollId,
+            // the backward loop prevents the index shift from breaking the next iteration.
+            CountRollVote(guid, roll->itemGUID, MAX_ROLL_TYPE);
         }
-        else
-            ++it;
     }
 }
 
