@@ -1126,6 +1126,8 @@ bool CanRollOnItem(LootItem const& item, Player const* player, Loot* loot)
 
 void Group::GroupLoot(Loot* loot, WorldObject* pLootedObject)
 {
+    std::lock_guard<std::recursive_mutex> lock(m_rollLock); // Candado añadido para proteger RollId
+
     std::vector<LootItem>::iterator i;
     ItemTemplate const* item;
     uint8 itemSlot = 0;
@@ -1291,6 +1293,8 @@ void Group::GroupLoot(Loot* loot, WorldObject* pLootedObject)
 
 void Group::NeedBeforeGreed(Loot* loot, WorldObject* lootedObject)
 {
+    std::lock_guard<std::recursive_mutex> lock(m_rollLock); // Candado añadido para proteger RollId
+
     ItemTemplate const* item;
     uint8 itemSlot = 0;
     for (std::vector<LootItem>::iterator i = loot->items.begin(); i != loot->items.end(); ++i, ++itemSlot)
@@ -1583,6 +1587,8 @@ void Group::EndRoll(Loot* pLoot)
 
 void Group::RemovePlayerFromRolls(ObjectGuid guid)
 {
+    std::lock_guard<std::recursive_mutex> lock(m_rollLock); // Faltaba este candado
+
     if (RollId.empty())
         return;
 
@@ -1609,6 +1615,8 @@ void Group::RemovePlayerFromRolls(ObjectGuid guid)
 
 void Group::CountTheRoll(Rolls::iterator rollI)
 {
+    std::lock_guard<std::recursive_mutex> lock(m_rollLock);
+
     Roll* roll = *rollI;
     
     // Si ya fue completado o es inválido, lo marcamos y retornamos en lugar de eliminarlo

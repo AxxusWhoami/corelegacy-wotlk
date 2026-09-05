@@ -345,6 +345,8 @@ protected:
     void _homebindIfInstance(Player* player);
     void _cancelHomebindIfInstance(Player* player);
 
+    std::recursive_mutex m_rollLock;
+
     void _initRaidSubGroupsCounter();
     member_citerator _getMemberCSlot(ObjectGuid Guid) const;
     member_witerator _getMemberWSlot(ObjectGuid Guid);
