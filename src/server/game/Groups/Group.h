@@ -25,6 +25,8 @@
 #include "QueryResult.h"
 #include "SharedDefines.h"
 #include <functional>
+#include <mutex>
+#include <atomic>
 
 class Battlefield;
 class Battleground;
@@ -249,9 +251,16 @@ public:
     bool SameSubGroup(Player const* member1, Player const* member2) const;
     bool HasFreeSlotSubGroup(uint8 subgroup) const;
 
+    // NOT thread-safe. Returns the live intrusive reference chain / list; iterating from a thread that does not
+    // own the world tick races with AddMember/RemoveMember/Disband. External code that runs off the world thread
+    // (Map worker threads, RandomPlayerbotMgr background threads) MUST use CopyMemberSlots or ForEachMember.
     MemberSlotList const& GetMemberSlots() const { return m_memberSlots; }
     GroupReference* GetFirstMember() { return m_memberMgr.getFirst(); }
     GroupReference const* GetFirstMember() const { return m_memberMgr.getFirst(); }
+
+    // Thread-safe helpers: snapshot the member list / iterate under the group lock.
+    MemberSlotList CopyMemberSlots() const;
+    void ForEachMember(std::function<void(MemberSlot const&)> const& fn) const;
     uint32 GetMembersCount() const { return m_memberSlots.size(); }
     uint32 GetInviteeCount() const { return m_invitees.size(); }
 
@@ -273,7 +282,7 @@ public:
     void RemoveUniqueGroupMemberFlag(GroupMemberFlags flag);
 
     //mod_playerbots
-    ObjectGuid const GetTargetIcon(uint8 id) const { return id < TARGETICONCOUNT ? m_targetIcons[id] : ObjectGuid::Empty; }
+    ObjectGuid GetTargetIcon(uint8 id) const;
 
     Difficulty GetDifficulty(bool isRaid) const;
     Difficulty GetDungeonDifficulty() const;
@@ -315,7 +324,7 @@ public:
     void EndRoll(Loot* loot);
     void RemovePlayerFromRolls(ObjectGuid guid);
 
-    Rolls GetRolls() const { return RollId; }
+    Rolls GetRolls() const;
 
     // related to disenchant rolls
     void ResetMaxEnchantingLevel();
@@ -326,16 +335,16 @@ public:
     void BroadcastGroupUpdate(void);
 
     // LFG
-    void AddLfgBuffFlag() { m_lfgGroupFlags |= GROUP_LFG_FLAG_APPLY_RANDOM_BUFF; }
-    void AddLfgRandomInstanceFlag() { m_lfgGroupFlags |= GROUP_LFG_FLAG_IS_RANDOM_INSTANCE; }
-    void AddLfgHeroicFlag() { m_lfgGroupFlags |= GROUP_LFG_FLAG_IS_HEROIC; }
-    bool IsLfgWithBuff() const { return isLFGGroup() && (m_lfgGroupFlags & GROUP_LFG_FLAG_APPLY_RANDOM_BUFF); }
-    bool IsLfgRandomInstance() const { return isLFGGroup() && (m_lfgGroupFlags & GROUP_LFG_FLAG_IS_RANDOM_INSTANCE); }
-    bool IsLfgHeroic() const { return isLFGGroup() && (m_lfgGroupFlags & GROUP_LFG_FLAG_IS_HEROIC); }
+    void AddLfgBuffFlag() { m_lfgGroupFlags.fetch_or(GROUP_LFG_FLAG_APPLY_RANDOM_BUFF, std::memory_order_relaxed); }
+    void AddLfgRandomInstanceFlag() { m_lfgGroupFlags.fetch_or(GROUP_LFG_FLAG_IS_RANDOM_INSTANCE, std::memory_order_relaxed); }
+    void AddLfgHeroicFlag() { m_lfgGroupFlags.fetch_or(GROUP_LFG_FLAG_IS_HEROIC, std::memory_order_relaxed); }
+    bool IsLfgWithBuff() const { return isLFGGroup() && (m_lfgGroupFlags.load(std::memory_order_relaxed) & GROUP_LFG_FLAG_APPLY_RANDOM_BUFF); }
+    bool IsLfgRandomInstance() const { return isLFGGroup() && (m_lfgGroupFlags.load(std::memory_order_relaxed) & GROUP_LFG_FLAG_IS_RANDOM_INSTANCE); }
+    bool IsLfgHeroic() const { return isLFGGroup() && (m_lfgGroupFlags.load(std::memory_order_relaxed) & GROUP_LFG_FLAG_IS_HEROIC); }
 
     // Difficulty Change
     uint32 GetDifficultyChangePreventionTime() const;
-    DifficultyPreventionChangeType GetDifficultyChangePreventionReason() const { return _difficultyChangePreventionType; }
+    DifficultyPreventionChangeType GetDifficultyChangePreventionReason() const { return _difficultyChangePreventionType.load(std::memory_order_relaxed); }
     void SetDifficultyChangePrevention(DifficultyPreventionChangeType type);
     void DoForAllMembers(std::function<void(Player*)> const& worker);
 
@@ -375,10 +384,14 @@ protected:
     ObjectGuid          m_guid;
     uint32              m_counter;                      // used only in SMSG_GROUP_LIST
     uint32              m_maxEnchantingLevel;
-    uint8               m_lfgGroupFlags;
+    std::atomic<uint8>  m_lfgGroupFlags;
 
     // Xinef: change difficulty prevention
-    uint32 _difficultyChangePreventionTime;
-    DifficultyPreventionChangeType _difficultyChangePreventionType;
+    std::atomic<uint32> _difficultyChangePreventionTime;
+    std::atomic<DifficultyPreventionChangeType> _difficultyChangePreventionType;
+
+    // Serializes access to the shared containers (m_memberSlots, m_invitees, RollId, subgroup counters, targeting icons)
+    // Recursive because several public methods call other public methods on the same Group instance.
+    mutable std::recursive_mutex m_groupLock;
 };
 #endif
