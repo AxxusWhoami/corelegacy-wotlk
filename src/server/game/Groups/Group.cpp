@@ -1498,58 +1498,6 @@ void Group::MasterLoot(Loot* loot, WorldObject* pLootedObject)
     }
 }
 
-bool Group::CountRollVote(ObjectGuid playerGUID, ObjectGuid Guid, uint8 Choice)
-{
-    Rolls::iterator rollI = GetRoll(Guid);
-    if (rollI == RollId.end())
-        return false;
-    Roll* roll = *rollI;
-
-    // Evitar procesar si la tirada ya concluyó
-    if (roll->isCompleted)
-        return false;
-
-    Roll::PlayerVote::iterator itr = roll->playerVote.find(playerGUID);
-    // Filtrar Use-After-Free por duplicidad de votos del mismo bot
-    if (Choice < MAX_ROLL_TYPE && (itr == roll->playerVote.end() || itr->second != NOT_EMITED_YET))
-        return false;
-
-    if (roll->getLoot())
-        if (roll->getLoot()->items.empty())
-            return false;
-
-    switch (Choice)
-    {
-        case ROLL_PASS:                                     // Player choose pass
-            SendLootRoll(ObjectGuid::Empty, playerGUID, 128, ROLL_PASS, *roll);
-            ++roll->totalPass;
-            itr->second = PASS;
-            break;
-        case ROLL_NEED:                                     // player choose Need
-            SendLootRoll(ObjectGuid::Empty, playerGUID, 0, 0, *roll);
-            ++roll->totalNeed;
-            itr->second = NEED;
-            break;
-        case ROLL_GREED:                                    // player choose Greed
-            SendLootRoll(ObjectGuid::Empty, playerGUID, 128, ROLL_GREED, *roll);
-            ++roll->totalGreed;
-            itr->second = GREED;
-            break;
-        case ROLL_DISENCHANT:                               // player choose Disenchant
-            SendLootRoll(ObjectGuid::Empty, playerGUID, 128, ROLL_DISENCHANT, *roll);
-            ++roll->totalGreed;
-            itr->second = DISENCHANT;
-            break;
-    }
-
-    if (roll->totalPass + roll->totalNeed + roll->totalGreed >= roll->totalPlayersRolling)
-    {
-        CountTheRoll(rollI);
-        return true;
-    }
-    return false;
-}
-
 //called when roll timer expires
 void Group::EndRoll(Loot* pLoot)
 {
@@ -1586,7 +1534,7 @@ void Group::RemovePlayerFromRolls(ObjectGuid guid)
     if (RollId.empty())
         return;
 
-    // Must iterate backwards to prevent index shifting when CountRollVote deletes the roll
+    // Iteramos en reversa para evitar saltos de índice si CountRollVote elimina la tirada
     for (int i = RollId.size() - 1; i >= 0; --i)
     {
         Roll* roll = RollId[i];
@@ -1594,31 +1542,99 @@ void Group::RemovePlayerFromRolls(ObjectGuid guid)
         
         if (itr2 != roll->playerVote.end())
         {
-            // Replaced ROLL_PASS/NEED/GREED with the correct RollVote enum values
-            if (itr2->second == PASS || itr2->second == NEED || 
-                itr2->second == GREED || itr2->second == DISENCHANT)
-            {
-                --roll->totalPlayersRolling;
-            }
+            // Descontamos el voto específico si el jugador ya había votado
+            if (itr2->second == PASS)
+                --roll->totalPass;
+            else if (itr2->second == NEED)
+                --roll->totalNeed;
+            else if (itr2->second == GREED || itr2->second == DISENCHANT)
+                --roll->totalGreed;
 
+            // SIEMPRE debemos reducir el total de jugadores esperados
+            --roll->totalPlayersRolling;
             roll->playerVote.erase(itr2);
-            CountRollVote(guid, roll->itemGUID, MAX_ROLL_TYPE);
+
+            // Forzamos la revaluación de la tirada por si este era el último voto faltante
+            CountRollVote(guid, roll->itemGUID, NOT_VALID);
         }
     }
+}
+
+bool Group::CountRollVote(ObjectGuid playerGUID, ObjectGuid Guid, uint8 Choice)
+{
+    Rolls::iterator rollI = GetRoll(Guid);
+    if (rollI == RollId.end())
+        return false;
+    Roll* roll = *rollI;
+
+    // Evitar procesar si la tirada ya concluyó
+    if (roll->isCompleted)
+        return false;
+
+    Roll::PlayerVote::iterator itr = roll->playerVote.find(playerGUID);
+    
+    // Filtrar Use-After-Free por duplicidad de votos del mismo bot
+    if (Choice < NOT_VALID && (itr == roll->playerVote.end() || itr->second != NOT_EMITED_YET))
+        return false;
+
+    // Verificación segura de límites para evitar crasheos si el loot fue limpiado
+    if (Choice < NOT_VALID)
+    {
+        Loot* loot = roll->getLoot();
+        if (loot && roll->itemSlot >= loot->items.size() + loot->quest_items.size())
+            return false;
+    }
+
+    switch (Choice)
+    {
+        case ROLL_PASS:
+            SendLootRoll(ObjectGuid::Empty, playerGUID, 128, ROLL_PASS, *roll);
+            ++roll->totalPass;
+            if (itr != roll->playerVote.end()) itr->second = PASS;
+            break;
+        case ROLL_NEED:
+            SendLootRoll(ObjectGuid::Empty, playerGUID, 0, 0, *roll);
+            ++roll->totalNeed;
+            if (itr != roll->playerVote.end()) itr->second = NEED;
+            break;
+        case ROLL_GREED:
+            SendLootRoll(ObjectGuid::Empty, playerGUID, 128, ROLL_GREED, *roll);
+            ++roll->totalGreed;
+            if (itr != roll->playerVote.end()) itr->second = GREED;
+            break;
+        case ROLL_DISENCHANT:
+            SendLootRoll(ObjectGuid::Empty, playerGUID, 128, ROLL_DISENCHANT, *roll);
+            ++roll->totalGreed;
+            if (itr != roll->playerVote.end()) itr->second = DISENCHANT;
+            break;
+    }
+
+    if (roll->totalPass + roll->totalNeed + roll->totalGreed >= roll->totalPlayersRolling)
+    {
+        CountTheRoll(rollI);
+        return true;
+    }
+    return false;
 }
 
 void Group::CountTheRoll(Rolls::iterator rollI)
 {
     Roll* roll = *rollI;
     
-    // Si ya fue completado o es inválido, lo marcamos y retornamos en lugar de eliminarlo
     if (!roll->isValid() || roll->isCompleted)
     {
         roll->isCompleted = true;
         return;
     }
 
-    //end of the roll
+    Loot* loot = roll->getLoot();
+    // Protección absoluta contra UAF/OOB si el objeto contenedor del loot fue despawneado
+    if (!loot || roll->itemSlot >= loot->items.size() + loot->quest_items.size())
+    {
+        roll->isCompleted = true;
+        return;
+    }
+
     if (roll->totalNeed > 0)
     {
         if (!roll->playerVote.empty())
@@ -1658,18 +1674,27 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                     player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ROLL_NEED_ON_LOOT, roll->itemid, maxresul);
 
                     ItemPosCountVec dest;
-                    LootItem* item = &(roll->itemSlot >= roll->getLoot()->items.size() ? roll->getLoot()->quest_items[roll->itemSlot - roll->getLoot()->items.size()] : roll->getLoot()->items[roll->itemSlot]);
+                    LootItem* item = &(roll->itemSlot >= loot->items.size() ? loot->quest_items[roll->itemSlot - loot->items.size()] : loot->items[roll->itemSlot]);
                     InventoryResult msg = player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, roll->itemid, item->count);
+                    
                     if (msg == EQUIP_ERR_OK)
                     {
                         item->is_looted = true;
-                        roll->getLoot()->NotifyItemRemoved(roll->itemSlot);
-                        roll->getLoot()->unlootedCount--;
+                        
+                        // FIX: Capturamos todo en memoria local ANTES de ejecutar NotifyItemRemoved 
+                        // dado que esta llamada puede despawnear el objeto y corromper el puntero 'item'
                         AllowedLooterSet looters = item->GetAllowedLooters();
-                        Item* _item = player->StoreNewItem(dest, roll->itemid, true, item->randomPropertyId, looters);
+                        uint32 itemCount = item->count;
+                        int32 randomPropId = item->randomPropertyId;
+
+                        player->UpdateLootAchievements(item, loot);
+
+                        loot->unlootedCount--;
+                        loot->NotifyItemRemoved(roll->itemSlot);
+                        
+                        Item* _item = player->StoreNewItem(dest, roll->itemid, true, randomPropId, looters);
                         if (_item)
-                            sScriptMgr->OnPlayerGroupRollRewardItem(player, _item, item->count, NEED, roll);
-                        player->UpdateLootAchievements(item, roll->getLoot());
+                            sScriptMgr->OnPlayerGroupRollRewardItem(player, _item, itemCount, NEED, roll);
                     }
                     else
                     {
@@ -1677,10 +1702,13 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                         if (msg == EQUIP_ERR_INVENTORY_FULL && (mailOnFull == MAIL_ITEM_ON_FULL_INVENTORY_EVERYWHERE || (mailOnFull == MAIL_ITEM_ON_FULL_INVENTORY_LFG_ONLY && isLFGGroup())))
                         {
                             item->is_looted = true;
-                            roll->getLoot()->NotifyItemRemoved(roll->itemSlot);
-                            roll->getLoot()->unlootedCount--;
-                            player->SendEquipError(msg, nullptr, nullptr, roll->itemid);
+                            // Enviar correo antes de notificar para evitar leer un ItemTemplate destruido
                             SendRollWonItemViaMail(player, item, roll->itemid);
+
+                            loot->unlootedCount--;
+                            loot->NotifyItemRemoved(roll->itemSlot);
+
+                            player->SendEquipError(msg, nullptr, nullptr, roll->itemid);
                         }
                         else
                         {
@@ -1695,6 +1723,7 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                 roll->totalNeed = 0;
         }
     }
+    
     if (roll->totalNeed == 0 && roll->totalGreed > 0) 
     {
         if (!roll->playerVote.empty())
@@ -1736,7 +1765,7 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                 {
                     player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ROLL_GREED_ON_LOOT, roll->itemid, maxresul);
 
-                    LootItem* item = &(roll->itemSlot >= roll->getLoot()->items.size() ? roll->getLoot()->quest_items[roll->itemSlot - roll->getLoot()->items.size()] : roll->getLoot()->items[roll->itemSlot]);
+                    LootItem* item = &(roll->itemSlot >= loot->items.size() ? loot->quest_items[roll->itemSlot - loot->items.size()] : loot->items[roll->itemSlot]);
 
                     if (rollvote == GREED)
                     {
@@ -1745,13 +1774,20 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                         if (msg == EQUIP_ERR_OK)
                         {
                             item->is_looted = true;
-                            roll->getLoot()->NotifyItemRemoved(roll->itemSlot);
-                            roll->getLoot()->unlootedCount--;
+                            
+                            // FIX UAF
                             AllowedLooterSet looters = item->GetAllowedLooters();
-                            Item* _item = player->StoreNewItem(dest, roll->itemid, true, item->randomPropertyId, looters);
+                            uint32 itemCount = item->count;
+                            int32 randomPropId = item->randomPropertyId;
+
+                            player->UpdateLootAchievements(item, loot);
+
+                            loot->unlootedCount--;
+                            loot->NotifyItemRemoved(roll->itemSlot);
+                            
+                            Item* _item = player->StoreNewItem(dest, roll->itemid, true, randomPropId, looters);
                             if (_item)
-                                sScriptMgr->OnPlayerGroupRollRewardItem(player, _item, item->count, GREED, roll);
-                            player->UpdateLootAchievements(item, roll->getLoot());
+                                sScriptMgr->OnPlayerGroupRollRewardItem(player, _item, itemCount, GREED, roll);
                         }
                         else
                         {
@@ -1759,10 +1795,12 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                             if (msg == EQUIP_ERR_INVENTORY_FULL && (mailOnFull == MAIL_ITEM_ON_FULL_INVENTORY_EVERYWHERE || (mailOnFull == MAIL_ITEM_ON_FULL_INVENTORY_LFG_ONLY && isLFGGroup())))
                             {
                                 item->is_looted = true;
-                                roll->getLoot()->NotifyItemRemoved(roll->itemSlot);
-                                roll->getLoot()->unlootedCount--;
-                                player->SendEquipError(msg, nullptr, nullptr, roll->itemid);
                                 SendRollWonItemViaMail(player, item, roll->itemid);
+                                
+                                loot->unlootedCount--;
+                                loot->NotifyItemRemoved(roll->itemSlot);
+                                
+                                player->SendEquipError(msg, nullptr, nullptr, roll->itemid);
                             }
                             else
                             {
@@ -1775,8 +1813,7 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                     else if (rollvote == DISENCHANT)
                     {
                         item->is_looted = true;
-                        roll->getLoot()->NotifyItemRemoved(roll->itemSlot);
-                        roll->getLoot()->unlootedCount--;
+                        
                         ItemTemplate const* pProto = sObjectMgr->GetItemTemplate(roll->itemid);
                         player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_CAST_SPELL, 13262); // Disenchant
 
@@ -1785,17 +1822,22 @@ void Group::CountTheRoll(Rolls::iterator rollI)
 
                         if (msg == EQUIP_ERR_OK)
                         {
+                            loot->unlootedCount--;
+                            loot->NotifyItemRemoved(roll->itemSlot);
                             player->AutoStoreLoot(pProto->DisenchantID, LootTemplates_Disenchant, true);
                         }
                         else
                         {
-                            Loot loot;
-                            loot.FillLoot(pProto->DisenchantID, LootTemplates_Disenchant, player, true);
+                            Loot resLoot;
+                            resLoot.FillLoot(pProto->DisenchantID, LootTemplates_Disenchant, player, true);
 
-                            uint32 max_slot = loot.GetMaxSlotInLootFor(player);
+                            loot->unlootedCount--;
+                            loot->NotifyItemRemoved(roll->itemSlot);
+
+                            uint32 max_slot = resLoot.GetMaxSlotInLootFor(player);
                             for(uint32 i = 0; i < max_slot; i++)
                             {
-                                LootItem* lootItem = loot.LootItemInSlot(i, player);
+                                LootItem* lootItem = resLoot.LootItemInSlot(i, player);
                                 player->SendEquipError(msg, nullptr, nullptr, lootItem->itemid);
                                 player->SendItemRetrievalMail(lootItem->itemid, lootItem->count);
                             }
@@ -1807,16 +1849,19 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                 roll->totalGreed = 0;
         }
     }
+    
     if (roll->totalNeed == 0 && roll->totalGreed == 0) 
     {
         SendLootAllPassed(*roll);
 
-        LootItem* item = &(roll->itemSlot >= roll->getLoot()->items.size() ? roll->getLoot()->quest_items[roll->itemSlot - roll->getLoot()->items.size()] : roll->getLoot()->items[roll->itemSlot]);
+        LootItem* item = &(roll->itemSlot >= loot->items.size() ? loot->quest_items[roll->itemSlot - loot->items.size()] : loot->items[roll->itemSlot]);
         if (item)
             item->is_blocked = false;
     }
 
-    if (Loot* loot = roll->getLoot(); loot && loot->isLooted() && loot->sourceGameObject)
+    // Refrescamos la variable local de `loot` tras las posibles modificaciones
+    loot = roll->getLoot();
+    if (loot && loot->isLooted() && loot->sourceGameObject)
     {
         GameObjectTemplate const* goInfo = loot->sourceGameObject->GetGOInfo();
         if (goInfo && goInfo->type == GAMEOBJECT_TYPE_CHEST)
@@ -1825,7 +1870,6 @@ void Group::CountTheRoll(Rolls::iterator rollI)
         }
     }
 
-    // ELIMINACIÓN DIFERIDA: Solo lo marcamos como completado
     roll->isCompleted = true;
 }
 
