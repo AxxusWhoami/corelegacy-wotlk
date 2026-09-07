@@ -101,7 +101,8 @@ static void SendRollWonItemViaMail(Player* player, LootItem const* lootItem, uin
 Group::Group() : m_leaderName(""), m_groupType(GROUPTYPE_NORMAL),
     m_dungeonDifficulty(DUNGEON_DIFFICULTY_NORMAL), m_raidDifficulty(RAID_DIFFICULTY_10MAN_NORMAL),
     m_bfGroup(nullptr), m_bgGroup(nullptr), m_lootMethod(FREE_FOR_ALL), m_lootThreshold(ITEM_QUALITY_UNCOMMON),
-    m_subGroupsCounts(nullptr), m_counter(0), m_maxEnchantingLevel(0), _difficultyChangePreventionTime(0),
+    m_subGroupsCounts(nullptr), m_counter(0), m_maxEnchantingLevel(0), m_lfgGroupFlags(0),
+    _difficultyChangePreventionTime(0),
     _difficultyChangePreventionType(DIFFICULTY_PREVENTION_CHANGE_NONE)
 {
     sScriptMgr->OnConstructGroup(this);
@@ -275,6 +276,9 @@ void Group::LoadMemberFromDB(ObjectGuid::LowType guidLow, uint8 memberFlags, uin
         CharacterDatabase.Execute(stmt);
         return;
     }
+
+    if (subgroup >= MAX_RAID_SUBGROUPS)
+        subgroup = 0;
 
     member.group = subgroup;
     member.flags = memberFlags;
@@ -886,6 +890,8 @@ void Group::ForcedDisband(bool hideDestroy /* = false */)
             player->SendDirectMessage(&data);
         }
     }
+    for (Roll* r : RollId)
+        delete r;
     RollId.clear();
     m_memberSlots.clear();
 
@@ -1299,6 +1305,8 @@ void Group::NeedBeforeGreed(Loot* loot, WorldObject* lootedObject)
             continue;
 
         item = sObjectMgr->GetItemTemplate(i->itemid);
+        if (!item)
+            continue;
 
         //roll for over-threshold item if it's one-player loot
         if (item->Quality >= uint32(m_lootThreshold))
@@ -1382,6 +1390,9 @@ void Group::NeedBeforeGreed(Loot* loot, WorldObject* lootedObject)
             continue;
 
         item = sObjectMgr->GetItemTemplate(i->itemid);
+        if (!item)
+            continue;
+
         ObjectGuid newitemGUID = ObjectGuid::Create<HighGuid::Item>(sObjectMgr->GetGenerator<HighGuid::Item>().Generate());
         Roll* r = new Roll(newitemGUID, *i);
 
@@ -1469,7 +1480,7 @@ void Group::MasterLoot(Loot* loot, WorldObject* pLootedObject)
     for (GroupReference* itr = GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         Player* looter = itr->GetSource();
-        if (!looter->IsInWorld())
+        if (!looter || !looter->IsInWorld())
         {
             continue;
         }
@@ -1815,6 +1826,9 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                         item->is_looted = true;
                         
                         ItemTemplate const* pProto = sObjectMgr->GetItemTemplate(roll->itemid);
+                        if (!pProto)
+                            break;
+
                         player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_CAST_SPELL, 13262); // Disenchant
 
                         ItemPosCountVec dest;
@@ -1838,6 +1852,8 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                             for(uint32 i = 0; i < max_slot; i++)
                             {
                                 LootItem* lootItem = resLoot.LootItemInSlot(i, player);
+                                if (!lootItem)
+                                    continue;
                                 player->SendEquipError(msg, nullptr, nullptr, lootItem->itemid);
                                 player->SendItemRetrievalMail(lootItem->itemid, lootItem->count);
                             }
@@ -1944,7 +1960,10 @@ void Group::SendUpdateToPlayer(ObjectGuid playerGUID, MemberSlot* slot)
         slot = &(*witr);
     }
 
-    WorldPacket data(SMSG_GROUP_LIST, (1 + 1 + 1 + 1 + 1 + 4 + 8 + 4 + 4 + (GetMembersCount() - 1) * (13 + 8 + 1 + 1 + 1 + 1) + 8 + 1 + 8 + 1 + 1 + 1 + 1));
+    uint32 const memberCount = GetMembersCount();
+    uint32 const otherMembers = memberCount > 0 ? memberCount - 1 : 0;
+
+    WorldPacket data(SMSG_GROUP_LIST, (1 + 1 + 1 + 1 + 1 + 4 + 8 + 4 + 4 + otherMembers * (13 + 8 + 1 + 1 + 1 + 1) + 8 + 1 + 8 + 1 + 1 + 1 + 1));
     data << uint8(m_groupType);                         // group type (flags in 3.3)
     data << uint8(slot->group);
     data << uint8(slot->flags);
@@ -1957,7 +1976,7 @@ void Group::SendUpdateToPlayer(ObjectGuid playerGUID, MemberSlot* slot)
 
     data << m_guid;
     data << uint32(m_counter++);                        // 3.3, value increases every time this packet gets sent
-    data << uint32(GetMembersCount() - 1);
+    data << uint32(otherMembers);
     for (member_citerator citr = m_memberSlots.begin(); citr != m_memberSlots.end(); ++citr)
     {
         if (slot->guid == citr->guid)
@@ -1978,7 +1997,7 @@ void Group::SendUpdateToPlayer(ObjectGuid playerGUID, MemberSlot* slot)
 
     data << m_leaderGuid;                               // leader guid
 
-    if (GetMembersCount() - 1)
+    if (otherMembers)
     {
         data << uint8(m_lootMethod);                    // loot method
 
@@ -2067,6 +2086,9 @@ void Group::ChangeMembersGroup(ObjectGuid guid, uint8 group)
 {
     // Only raid groups have sub groups
     if (!isRaidGroup())
+        return;
+
+    if (group >= MAX_RAID_SUBGROUPS)
         return;
 
     // Check if player is really in the raid
@@ -2200,7 +2222,11 @@ GroupJoinBattlegroundResult Group::CanJoinBattlegroundQueue(Battleground const* 
         return ERR_BATTLEGROUND_NONE;
 
     // get a player as reference, to compare other players' stats to (arena team id, level bracket, etc.)
-    Player* reference = GetFirstMember()->GetSource();
+    GroupReference* firstMember = GetFirstMember();
+    if (!firstMember)
+        return ERR_BATTLEGROUND_JOIN_FAILED;
+
+    Player* reference = firstMember->GetSource();
     if (!reference)
         return ERR_BATTLEGROUND_JOIN_FAILED;
 
@@ -2287,6 +2313,9 @@ GroupJoinBattlegroundResult Group::CanJoinBattlegroundQueue(Battleground const* 
     if (isRated)
     {
         ArenaTeam* arenaTeam = sArenaTeamMgr->GetArenaTeamById(arenaTeamId);
+        if (!arenaTeam)
+            return ERR_BATTLEGROUND_JOIN_FAILED;
+
         for (auto const& itr : arenaTeam->GetMembers())
         {
             Player* teamMember = ObjectAccessor::FindConnectedPlayer(itr.Guid);
@@ -2643,7 +2672,7 @@ bool Group::SameSubGroup(ObjectGuid guid1, MemberSlot const* slot2) const
 
 bool Group::HasFreeSlotSubGroup(uint8 subgroup) const
 {
-    return (m_subGroupsCounts && m_subGroupsCounts[subgroup] < MAXGROUPSIZE);
+    return (subgroup < MAX_RAID_SUBGROUPS && m_subGroupsCounts && m_subGroupsCounts[subgroup] < MAXGROUPSIZE);
 }
 
 uint8 Group::GetMemberGroup(ObjectGuid guid) const
@@ -2783,13 +2812,13 @@ Group::member_witerator Group::_getMemberWSlot(ObjectGuid Guid)
 
 void Group::SubGroupCounterIncrease(uint8 subgroup)
 {
-    if (m_subGroupsCounts)
+    if (m_subGroupsCounts && subgroup < MAX_RAID_SUBGROUPS)
         ++m_subGroupsCounts[subgroup];
 }
 
 void Group::SubGroupCounterDecrease(uint8 subgroup)
 {
-    if (m_subGroupsCounts)
+    if (m_subGroupsCounts && subgroup < MAX_RAID_SUBGROUPS)
         --m_subGroupsCounts[subgroup];
 }
 
