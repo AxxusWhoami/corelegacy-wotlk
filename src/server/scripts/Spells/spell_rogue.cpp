@@ -328,19 +328,25 @@ class spell_rog_killing_spree_aura : public AuraScript
             ObjectGuid guid = Acore::Containers::SelectRandomContainerElement(_targets);
             if (Unit* target = ObjectAccessor::GetUnit(*GetTarget(), guid))
             {
-                // xinef: target may be no longer valid
                 if (!GetTarget()->IsValidAttackTarget(target) || target->HasStealthAura() || target->HasInvisibilityAura())
                 {
                     _targets.remove(guid);
                     continue;
                 }
-
+    
                 GetTarget()->CastSpell(target, SPELL_ROGUE_KILLING_SPREE_TELEPORT, true);
-
-                // xinef: ensure fast coordinates switch, dont wait for client to send opcode
+    
                 WorldLocation const& dest = GetTarget()->ToPlayer()->GetTeleportDest();
                 GetTarget()->ToPlayer()->UpdatePosition(dest, true);
-
+    
+                // Verificamos de antemano que el rogue puede ejecutar un ataque cuerpo a cuerpo
+                if (Player* player = GetTarget()->ToPlayer())
+                    if (!player->CanUseAttackType(BASE_ATTACK))
+                    {
+                        _targets.remove(guid);
+                        break;
+                    }
+    
                 GetTarget()->CastSpell(target, SPELL_ROGUE_KILLING_SPREE_WEAPON_DMG, TriggerCastFlags(TRIGGERED_FULL_MASK & ~TRIGGERED_DONT_REPORT_CAST_ERROR));
                 break;
             }

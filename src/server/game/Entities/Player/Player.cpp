@@ -7455,20 +7455,16 @@ void Player::CastItemCombatSpell(Unit* target, WeaponAttackType attType, uint32 
     if (!sScriptMgr->OnPlayerCanCastItemCombatSpell(this, target, attType, procVictim, procEx, item, proto))
         return;
 
+    ObjectGuid itemGuid = item->GetGUID();
+
     // Can do effect if any damage done to target
     if (procVictim & PROC_FLAG_TAKEN_DAMAGE)
-        //if (damageInfo->procVictim & PROC_FLAG_TAKEN_ANY_DAMAGE)
     {
         for (uint8 i = 0; i < MAX_ITEM_SPELLS; ++i)
         {
             _Spell const& spellData = proto->Spells[i];
 
-            // no spell
-            if (!spellData.SpellId)
-                continue;
-
-            // wrong triggering type
-            if (spellData.SpellTrigger != ITEM_SPELLTRIGGER_CHANCE_ON_HIT)
+            if (!spellData.SpellId || spellData.SpellTrigger != ITEM_SPELLTRIGGER_CHANCE_ON_HIT)
                 continue;
 
             SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellData.SpellId);
@@ -7486,12 +7482,16 @@ void Player::CastItemCombatSpell(Unit* target, WeaponAttackType attType, uint32 
                 chance = GetPPMProcChance(WeaponSpeed, spellData.SpellPPMRate, spellInfo);
             }
             else if (chance > 100.0f)
-            {
                 chance = GetWeaponProcChance();
-            }
 
             if (roll_chance_f(chance) && sScriptMgr->OnCastItemCombatSpell(this, target, spellInfo, item))
+            {
                 CastSpell(target, spellInfo->Id, TriggerCastFlags(TRIGGERED_FULL_MASK & ~TRIGGERED_IGNORE_SPELL_AND_CATEGORY_CD), item);
+                
+                // Seguridad: Verificar que el ítem no ha sido destruido o desequipado durante el CastSpell
+                if (GetItemByGuid(itemGuid) != item)
+                    return;
+            }
         }
     }
 
@@ -7512,17 +7512,11 @@ void Player::CastItemCombatSpell(Unit* target, WeaponAttackType attType, uint32 
 
             if (entry && entry->procEx)
             {
-                // Check hit/crit/dodge/parry requirement
                 if ((entry->procEx & procEx) == 0)
                     continue;
             }
-            else
-            {
-                // Can do effect if any damage done to target
-                if (!(procVictim & PROC_FLAG_TAKEN_DAMAGE))
-                    //if (!(damageInfo->procVictim & PROC_FLAG_TAKEN_ANY_DAMAGE))
-                    continue;
-            }
+            else if (!(procVictim & PROC_FLAG_TAKEN_DAMAGE))
+                continue;
 
             if (entry && (entry->attributeMask & ENCHANT_PROC_ATTR_WHITE_HIT) && (procVictim & SPELL_PROC_FLAG_MASK))
                 continue;
@@ -7539,9 +7533,7 @@ void Player::CastItemCombatSpell(Unit* target, WeaponAttackType attType, uint32 
             {
                 Unit* checkTarget = spellInfo->IsPositive() ? this : target;
                 if (checkTarget->HasAura(spellInfo->Id, GetGUID()))
-                {
                     continue;
-                }
             }
 
             float chance = pEnchant->amount[s] != 0 ? float(pEnchant->amount[s]) : GetWeaponProcChance();
@@ -7554,16 +7546,13 @@ void Player::CastItemCombatSpell(Unit* target, WeaponAttackType attType, uint32 
                     chance = (float)entry->customChance;
             }
 
-            // Apply spell mods
             ApplySpellMod(pEnchant->spellid[s], SPELLMOD_CHANCE_OF_SUCCESS, chance);
 
-            // Shiv has 100% chance to apply the poison
             if (FindCurrentSpellBySpellId(5938) && e_slot == TEMP_ENCHANTMENT_SLOT)
                 chance = 100.0f;
 
             if (roll_chance_f(chance))
             {
-                // Xinef: implement enchant charges
                 if (uint32 charges = item->GetEnchantmentCharges(EnchantmentSlot(e_slot)))
                 {
                     if (!--charges)
@@ -7577,6 +7566,10 @@ void Player::CastItemCombatSpell(Unit* target, WeaponAttackType attType, uint32 
 
                 Unit* unitTarget = spellInfo->IsPositive() ? this : target;
                 CastSpell(unitTarget, spellInfo, TriggerCastFlags(TRIGGERED_FULL_MASK & ~TRIGGERED_IGNORE_SPELL_AND_CATEGORY_CD), item);
+
+                // Seguridad: Verificar nuevamente si el ítem sigue existiendo
+                if (GetItemByGuid(itemGuid) != item)
+                    return;
             }
         }
     }
