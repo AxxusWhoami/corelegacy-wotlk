@@ -671,7 +671,7 @@ public:
     static bool HandleAccountCommand(ChatHandler* handler, char const* /*args*/)
     {
         AccountTypes gmLevel = handler->GetSession()->GetSecurity();
-        handler->PSendSysMessage(LANG_ACCOUNT_LEVEL, uint32(gmLevel));
+        //handler->PSendSysMessage(LANG_ACCOUNT_LEVEL, uint32(gmLevel));
 
         if (handler->GetSession()->HasPermission(rbac::RBAC_PERM_MAY_CHECK_OWN_EMAIL))
         {
