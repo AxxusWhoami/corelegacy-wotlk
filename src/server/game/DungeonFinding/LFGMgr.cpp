@@ -2476,33 +2476,56 @@ namespace lfg
         return LfgType(dungeon->type);
     }
 
-    LfgState LFGMgr::GetState(ObjectGuid guid)
-    {
-        LfgState state;
-        if (guid.IsGroup())
-            state = GroupsStore[guid].GetState();
-        else
-            state = PlayersStore[guid].GetState();
-
-        LOG_DEBUG("lfg", "LFGMgr::GetState: [{}] = {}", guid.ToString(), state);
-        return state;
-    }
+	LfgState LFGMgr::GetState(ObjectGuid guid)
+	{
+		LfgState state = LFG_STATE_NONE;
+	
+		if (guid.IsGroup())
+		{
+			auto it = GroupsStore.find(guid);
+			if (it != GroupsStore.end())
+				state = it->second.GetState();
+		}
+		else
+		{
+			auto it = PlayersStore.find(guid);
+			if (it != PlayersStore.end())
+				state = it->second.GetState();
+		}
+	
+		LOG_DEBUG("lfg", "LFGMgr::GetState: [{}] = {}", guid.ToString(), state);
+		return state;
+	}
 
     LfgState LFGMgr::GetOldState(ObjectGuid guid)
     {
-        LfgState state;
+        LfgState state = LFG_STATE_NONE;
+    
         if (guid.IsGroup())
-            state = GroupsStore[guid].GetOldState();
+        {
+            auto it = GroupsStore.find(guid);
+            if (it != GroupsStore.end())
+                state = it->second.GetOldState();
+        }
         else
-            state = PlayersStore[guid].GetOldState();
-
+        {
+            auto it = PlayersStore.find(guid);
+            if (it != PlayersStore.end())
+                state = it->second.GetOldState();
+        }
+    
         LOG_DEBUG("lfg", "LFGMgr::GetOldState: [{}] = {}", guid.ToString(), state);
         return state;
     }
-
+    
     uint32 LFGMgr::GetDungeon(ObjectGuid guid, bool asId /*= true */)
     {
-        uint32 dungeon = GroupsStore[guid].GetDungeon(asId);
+        uint32 dungeon = 0;
+        
+        auto it = GroupsStore.find(guid);
+        if (it != GroupsStore.end())
+            dungeon = it->second.GetDungeon(asId);
+    
         LOG_DEBUG("lfg", "LFGMgr::GetDungeon: [{}] asId: {} = {}", guid.ToString(), asId, dungeon);
         return dungeon;
     }
