@@ -1572,7 +1572,7 @@ void Group::RemovePlayerFromRolls(ObjectGuid guid)
     if (RollId.empty())
         return;
 
-    // Iteramos en reversa para evitar saltos de Ã­ndice si CountRollVote elimina la tirada
+    // Iteramos en reversa para evitar saltos de índice si CountRollVote elimina la tirada
     for (int i = RollId.size() - 1; i >= 0; --i)
     {
         Roll* roll = RollId[i];
@@ -1580,7 +1580,7 @@ void Group::RemovePlayerFromRolls(ObjectGuid guid)
         
         if (itr2 != roll->playerVote.end())
         {
-            // Descontamos el voto especÃ­fico si el jugador ya habÃ­a votado
+            // Descontamos el voto específico si el jugador ya había votado
             if (itr2->second == PASS)
                 --roll->totalPass;
             else if (itr2->second == NEED)
@@ -1592,7 +1592,7 @@ void Group::RemovePlayerFromRolls(ObjectGuid guid)
             --roll->totalPlayersRolling;
             roll->playerVote.erase(itr2);
 
-            // Forzamos la revaluaciÃ³n de la tirada por si este era el Ãºltimo voto faltante
+            // Forzamos la revaluación de la tirada por si este era el último voto faltante
             CountRollVote(guid, roll->itemGUID, NOT_VALID);
         }
     }
@@ -1606,7 +1606,7 @@ bool Group::CountRollVote(ObjectGuid playerGUID, ObjectGuid Guid, uint8 Choice)
         return false;
     Roll* roll = *rollI;
 
-    // Evitar procesar si la tirada ya concluyÃ³
+    // Evitar procesar si la tirada ya concluyó
     if (roll->isCompleted)
         return false;
 
@@ -1616,7 +1616,7 @@ bool Group::CountRollVote(ObjectGuid playerGUID, ObjectGuid Guid, uint8 Choice)
     if (Choice < NOT_VALID && (itr == roll->playerVote.end() || itr->second != NOT_EMITED_YET))
         return false;
 
-    // VerificaciÃ³n segura de lÃ­mites para evitar crasheos si el loot fue limpiado
+    // Verificación segura de límites para evitar crasheos si el loot fue limpiado
     if (Choice < NOT_VALID)
     {
         Loot* loot = roll->getLoot();
@@ -1668,7 +1668,7 @@ void Group::CountTheRoll(Rolls::iterator rollI)
     }
 
     Loot* loot = roll->getLoot();
-    // ProtecciÃ³n absoluta contra UAF/OOB si el objeto contenedor del loot fue despawneado
+    // Protección absoluta contra UAF/OOB si el objeto contenedor del loot fue despawneado
     if (!loot || roll->itemSlot >= loot->items.size() + loot->quest_items.size())
     {
         roll->isCompleted = true;
@@ -1706,7 +1706,7 @@ void Group::CountTheRoll(Rolls::iterator rollI)
 
             if (maxguid) 
             {
-                SendLootRollWon(ObjectGuid::Empty, maxguid, maxresul, ROLL_NEED, *roll);
+                SendLootRollWon(roll->itemGUID, maxguid, maxresul, ROLL_NEED, *roll);
                 player = ObjectAccessor::FindPlayer(maxguid);
 
                 if (player)
@@ -1798,7 +1798,7 @@ void Group::CountTheRoll(Rolls::iterator rollI)
 
             if (maxguid) 
             {
-                SendLootRollWon(ObjectGuid::Empty, maxguid, maxresul, rollvote, *roll);
+                SendLootRollWon(roll->itemGUID, maxguid, maxresul, rollvote, *roll);
                 player = ObjectAccessor::FindPlayer(maxguid);
 
                 if (player)
@@ -2831,7 +2831,7 @@ Group::Rolls::iterator Group::GetRoll(ObjectGuid Guid)
     Rolls::iterator iter = RollId.begin();
     while (iter != RollId.end())
     {
-        // Limpiamos los punteros completados o invÃ¡lidos silenciosamente
+        // Limpiamos los punteros completados o inválidos silenciosamente
         if ((*iter)->isCompleted || !(*iter)->isValid())
         {
             delete *iter;
