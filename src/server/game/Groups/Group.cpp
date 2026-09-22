@@ -414,7 +414,6 @@ void Group::RemoveInvite(Player* player)
     player->SetGroupInvite(nullptr);
 }
 
-
 void Group::RemoveAllInvites()
 {
     GROUP_GUARD;
