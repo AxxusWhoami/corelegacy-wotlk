@@ -2942,10 +2942,10 @@ ObjectGuid Group::GetTargetIcon(uint8 id) const
     return id < TARGETICONCOUNT ? m_targetIcons[id] : ObjectGuid::Empty;
 }
 
-Group::Rolls Group::GetRolls() const
+std::vector<Roll const*> Group::GetRolls() const
 {
     GROUP_GUARD;
-    return RollId;
+    return { RollId.begin(), RollId.end() };
 }
 
 Group::MemberSlotList Group::CopyMemberSlots() const
