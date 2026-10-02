@@ -171,7 +171,7 @@ public:
     uint8 totalPass;
     uint8 itemSlot;
     uint8 rollVoteMask;
-    bool isCompleted; // IMPLEMENTACIÃ“N DE ELIMINACIÃ“N DIFERIDA
+    bool isCompleted; // IMPLEMENTACIÓN DE ELIMINACIÓN DIFERIDA
 };
 
 /** request member stats checken **/
@@ -280,9 +280,7 @@ public:
     void SetTargetIcon(uint8 id, ObjectGuid whoGuid, ObjectGuid targetGuid);
     void SetGroupMemberFlag(ObjectGuid guid, bool apply, GroupMemberFlags flag);
     void RemoveUniqueGroupMemberFlag(GroupMemberFlags flag);
-
-    //mod_playerbots
-    ObjectGuid GetTargetIcon(uint8 id) const;
+    [[nodiscard]] ObjectGuid GetTargetIcon(uint8 id) const { return id < TARGETICONCOUNT ? m_targetIcons[id] : ObjectGuid::Empty; }
 
     Difficulty GetDifficulty(bool isRaid) const;
     Difficulty GetDungeonDifficulty() const;
@@ -324,7 +322,8 @@ public:
     void EndRoll(Loot* loot);
     void RemovePlayerFromRolls(ObjectGuid guid);
 
-    Rolls GetRolls() const;
+    // Snapshot of the active rolls, roll is deleted after a roll finishes. Do not cache the pointers across ticks.
+    [[nodiscard]] std::vector<Roll const*> GetRolls() const { return { RollId.begin(), RollId.end() }; }
 
     // related to disenchant rolls
     void ResetMaxEnchantingLevel();
