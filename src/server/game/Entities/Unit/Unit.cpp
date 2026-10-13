@@ -16775,8 +16775,25 @@ float Unit::GetCollisionHeight() const
     float scaleMod = GetObjectScale(); // 99% sure about this
     float defaultHeight = DEFAULT_COLLISION_HEIGHT * scaleMod;
 
-    CreatureDisplayInfoEntry const* displayInfo = sCreatureDisplayInfoStore.AssertEntry(GetNativeDisplayId());
-    CreatureModelDataEntry const* modelData = sCreatureModelDataStore.AssertEntry(displayInfo->ModelId);
+    CreatureDisplayInfoEntry const* displayInfo = sCreatureDisplayInfoStore.LookupEntry(GetNativeDisplayId());
+    if (!displayInfo)
+        displayInfo = sCreatureDisplayInfoStore.LookupEntry(GetDisplayId());
+
+    if (!displayInfo)
+    {
+        LOG_ERROR("entities.unit", "Unit::GetCollisionHeight: Unit ({}) has invalid NativeDisplayId ({}) and DisplayId ({}). Using default height.",
+            GetGUID().ToString(), GetNativeDisplayId(), GetDisplayId());
+        return defaultHeight;
+    }
+
+    CreatureModelDataEntry const* modelData = sCreatureModelDataStore.LookupEntry(displayInfo->ModelId);
+    if (!modelData)
+    {
+        LOG_ERROR("entities.unit", "Unit::GetCollisionHeight: DisplayId ({}) has invalid ModelId ({}) for Unit ({}). Using default height.",
+            displayInfo->ID, displayInfo->ModelId, GetGUID().ToString());
+        return defaultHeight;
+    }
+
     float collisionHeight = 0.0f;
 
     if (IsMounted())

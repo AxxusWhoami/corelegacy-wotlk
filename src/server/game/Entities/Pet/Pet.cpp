@@ -231,35 +231,51 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petEntry, uint32 petnumber, bool c
 
     // Don't try to reload the current pet
     if (petStable->CurrentPet && owner->GetPet() && petStable->CurrentPet.value().PetNumber == petInfo->PetNumber)
+    {
+        m_loading = false;
         return false;
+    }
 
     // we are loading pet at that moment
     if (owner->IsSpectator() || owner->GetPet() || !owner->IsInWorld() || !owner->FindMap())
+    {
+        m_loading = false;
         return false;
+    }
 
     bool forceLoadFromDB = false;
     sScriptMgr->OnPlayerBeforeLoadPetFromDB(owner, petEntry, petnumber, current, forceLoadFromDB);
 
     if (!forceLoadFromDB && (owner->IsClass(CLASS_DEATH_KNIGHT, CLASS_CONTEXT_PET) && !owner->CanSeeDKPet())) // DK Pet exception
+    {
+        m_loading = false;
         return false;
+    }
 
     SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(petInfo->CreatedBySpellId);
 
     bool isTemporarySummon = spellInfo && spellInfo->GetDuration() > 0;
     if (current && isTemporarySummon)
+    {
+        m_loading = false;
         return false;
+    }
 
     if (petInfo->Type == HUNTER_PET)
     {
         CreatureTemplate const* creatureInfo = sObjectMgr->GetCreatureTemplate(petInfo->CreatureId);
         if (!creatureInfo || !creatureInfo->IsTameable(owner->CanTameExoticPets()))
+        {
+            m_loading = false;
             return false;
+        }
     }
 
     if (current && owner->IsPetNeedBeTemporaryUnsummoned())
     {
         owner->SetLastPetSpell(petInfo->CreatedBySpellId);
         owner->SetTemporaryUnsummonedPetNumber(petInfo->PetNumber);
+        m_loading = false;
         return false;
     }
 
@@ -267,7 +283,10 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petEntry, uint32 petnumber, bool c
     ObjectGuid::LowType guid = map->GenerateLowGuid<HighGuid::Pet>();
 
     if (!Create(guid, map, owner->GetPhaseMask(), petInfo->CreatureId, petInfo->PetNumber))
+    {
+        m_loading = false;
         return false;
+    }
 
     setPetType(petInfo->Type);
     SetFaction(owner->GetFaction());
@@ -283,11 +302,13 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petEntry, uint32 petnumber, bool c
         {
             LOG_ERROR("entities.pet", "Pet{} not loaded. Suggested coordinates isn't valid (X: {} Y: {})",
                 GetGUID().ToString(), GetPositionX(), GetPositionY());
+            m_loading = false;
             return false;
         }
 
         UpdatePositionData();
         map->AddToMap(ToCreature(), true);
+        m_loading = false;
         return true;
     }
 
@@ -296,9 +317,31 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petEntry, uint32 petnumber, bool c
     else
         GetCharmInfo()->SetPetNumber(petInfo->PetNumber, false);
 
-    SetDisplayId(petInfo->DisplayId);
-    SetNativeDisplayId(petInfo->DisplayId);
-    UpdatePositionData();
+    uint32 validDisplayId = petInfo->DisplayId;
+    if (!validDisplayId || !sCreatureDisplayInfoStore.LookupEntry(validDisplayId))
+    {
+        validDisplayId = GetNativeDisplayId();
+        if (!validDisplayId || !sCreatureDisplayInfoStore.LookupEntry(validDisplayId))
+        {
+            if (CreatureModel const* model = ObjectMgr::ChooseDisplayId(GetCreatureTemplate()))
+                validDisplayId = model->CreatureDisplayID;
+        }
+
+        LOG_WARN("entities.pet", "Pet::LoadPetFromDB: Invalid DisplayId {} for pet (entry {}, number {}, owner {}), using fallback {}.",
+            petInfo->DisplayId, petInfo->CreatureId, petInfo->PetNumber, ownerid, validDisplayId);
+    }
+
+    if (!validDisplayId || !sCreatureDisplayInfoStore.LookupEntry(validDisplayId))
+    {
+        LOG_ERROR("entities.pet", "Pet::LoadPetFromDB: Cannot find any valid DisplayId for pet (entry {}, number {}, owner {}). Aborting pet load.",
+            petInfo->CreatureId, petInfo->PetNumber, ownerid);
+        m_loading = false;
+        return false;
+    }
+
+    SetDisplayId(validDisplayId);
+    SetNativeDisplayId(validDisplayId);
+
     uint8 petlevel = petInfo->Level;
     ReplaceAllNpcFlags(UNIT_NPC_FLAG_NONE);
     SetName(petInfo->Name);
@@ -342,8 +385,11 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petEntry, uint32 petnumber, bool c
     {
         LOG_ERROR("entities.pet", "Pet {} not loaded. Suggested coordinates isn't valid (X: {} Y: {})",
             GetGUID().ToString(), GetPositionX(), GetPositionY());
+        m_loading = false;
         return false;
     }
+
+    UpdatePositionData();
 
     SetReactState(petInfo->ReactState);
     SetCanModifyStats(true);
