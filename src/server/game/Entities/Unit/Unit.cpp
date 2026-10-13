@@ -16790,7 +16790,7 @@ float Unit::GetCollisionHeight() const
     if (!modelData)
     {
         LOG_ERROR("entities.unit", "Unit::GetCollisionHeight: DisplayId ({}) has invalid ModelId ({}) for Unit ({}). Using default height.",
-            displayInfo->ID, displayInfo->ModelId, GetGUID().ToString());
+            displayInfo->Displayid, displayInfo->ModelId, GetGUID().ToString());
         return defaultHeight;
     }
 
