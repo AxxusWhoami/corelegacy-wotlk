@@ -123,7 +123,15 @@ int main(int argc, char** argv)
 {
     Acore::Impl::CurrentServerProcessHolder::_type = SERVER_PROCESS_WORLDSERVER;
     signal(SIGABRT, &Acore::AbortHandler);
-	signal(SIGPIPE, SIG_IGN);
+
+#ifndef _WIN32
+    // Bloqueo estricto de SIGPIPE a nivel de máscara de hilos (Thread Signal Mask).
+    // Evita que OpenSSL, MySQL o Boost.Asio restauren el cierre forzoso por Broken Pipe.
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGPIPE);
+    pthread_sigmask(SIG_BLOCK, &set, nullptr);
+#endif
 
     // Command line parsing
     auto configFile = fs::path(sConfigMgr->GetConfigPath() + std::string(_ACORE_CORE_CONFIG));
