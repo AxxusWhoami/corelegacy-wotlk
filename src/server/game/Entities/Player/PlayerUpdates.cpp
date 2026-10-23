@@ -1893,6 +1893,10 @@ void Player::UpdateZoneDependentAuras(uint32 newZone)
 
 void Player::UpdateAreaDependentAuras(uint32 newArea)
 {
+	// Fix: Prevenir aplicación de auras de área si el jugador está transicionando entre mapas
+    if (!IsInWorld() || IsDuringRemoveFromWorld())
+        return;
+
     // remove auras from spells with area limitations
     for (AuraMap::iterator iter = m_ownedAuras.begin();
          iter != m_ownedAuras.end();)
