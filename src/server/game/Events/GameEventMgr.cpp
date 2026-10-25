@@ -1894,16 +1894,43 @@ public:
 
     void Visit(std::unordered_map<ObjectGuid, Creature*>& creatureMap)
     {
+        // Pass 1: Buffer pointers to avoid iterator invalidation 
+        // if a script dynamically spawns/despawns a creature.
+        std::vector<Creature*> creatures;
+        creatures.reserve(creatureMap.size());
+        
         for (auto const& p : creatureMap)
-            if (p.second->IsInWorld() && !p.second->IsDuringRemoveFromWorld() && p.second->FindMap() && p.second->IsAIEnabled && p.second->AI())
-                p.second->AI()->sOnGameEvent(_activate, _eventId);
+        {
+            if (p.second && p.second->IsInWorld() && !p.second->IsDuringRemoveFromWorld() && p.second->FindMap() && p.second->IsAIEnabled && p.second->AI())
+                creatures.push_back(p.second);
+        }
+
+        // Pass 2: Execute hooks on buffered instances
+        for (Creature* creature : creatures)
+        {
+            // Re-validate state in case a previous script despawned this unit
+            if (creature->IsInWorld() && !creature->IsDuringRemoveFromWorld() && creature->IsAIEnabled && creature->AI())
+                creature->AI()->sOnGameEvent(_activate, _eventId);
+        }
     }
 
     void Visit(std::unordered_map<ObjectGuid, GameObject*>& gameObjectMap)
     {
+        // Apply the same buffer safety net to GameObjects
+        std::vector<GameObject*> gameObjects;
+        gameObjects.reserve(gameObjectMap.size());
+
         for (auto const& p : gameObjectMap)
-            if (p.second->IsInWorld() && p.second->FindMap() && p.second->AI())
-                p.second->AI()->OnGameEvent(_activate, _eventId);
+        {
+            if (p.second && p.second->IsInWorld() && p.second->FindMap() && p.second->AI())
+                gameObjects.push_back(p.second);
+        }
+
+        for (GameObject* go : gameObjects)
+        {
+            if (go->IsInWorld() && go->AI())
+                go->AI()->OnGameEvent(_activate, _eventId);
+        }
     }
 
     template<class T>
