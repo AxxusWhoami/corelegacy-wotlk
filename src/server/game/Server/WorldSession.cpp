@@ -849,16 +849,26 @@ void WorldSession::LogoutPlayer(bool save, bool redirecting)
         // e.g if he got disconnected during a transfer to another map
         // calls to GetMap in this case may cause crashes
         
-        // 1. Retirar al jugador del mapa PRIMERO.
-        if (Map* _map = _player->FindMap())
+        // 1. Forzar la salida del Battleground ANTES de limpiar la memoria.
+        // Esto permite que el bot reciba auras (como la resurrección) de forma segura.
+        if (Battleground* bg = _player->GetBattleground())
         {
-            _map->RemovePlayerFromMap(_player, true);
-            _map->AfterPlayerUnlinkFromMap();
+            bg->RemovePlayerAtLeave(_player);
+            // Anulamos el ID de BG del jugador. Esto es vital para que 
+            // BattlegroundMap::RemovePlayerFromMap no intente procesarlo por segunda vez.
+            _player->SetBattlegroundId(0, BATTLEGROUND_TYPE_NONE);
         }
 
-        // 2. Ahora que el jugador ya no existe físicamente en el mundo, 
-        // es 100% seguro purgar sus datos internos de la memoria.
+        // 2. Ahora sí, limpiar la memoria interna del jugador de forma segura.
         _player->CleanupsBeforeDelete();
+
+        // 3. Retirar físicamente del mapa.
+        // IMPORTANTE: Pasamos 'false' para que la clase Map no ejecute CleanupsBeforeDelete otra vez.
+        if (Map* _map = _player->FindMap())
+        {
+            _map->RemovePlayerFromMap(_player, false);
+            _map->AfterPlayerUnlinkFromMap();
+        }
 
         SetPlayer(nullptr); // pointer already deleted
 
