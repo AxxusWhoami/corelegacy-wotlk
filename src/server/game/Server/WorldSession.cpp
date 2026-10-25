@@ -848,20 +848,17 @@ void WorldSession::LogoutPlayer(bool save, bool redirecting)
         // the player may not be in the world when logging out
         // e.g if he got disconnected during a transfer to another map
         // calls to GetMap in this case may cause crashes
-
-        // CORRECCIÓN: Garantizar que la desconexión del Battleground ocurra ANTES de CleanupsBeforeDelete()
-        if (Battleground* bg = _player->GetBattleground())
-        {
-            bg->RemovePlayerAtLeave(_player);
-        }
-
-        _player->CleanupsBeforeDelete();
-
+        
+        // 1. Retirar al jugador del mapa PRIMERO.
         if (Map* _map = _player->FindMap())
         {
             _map->RemovePlayerFromMap(_player, true);
             _map->AfterPlayerUnlinkFromMap();
         }
+
+        // 2. Ahora que el jugador ya no existe físicamente en el mundo, 
+        // es 100% seguro purgar sus datos internos de la memoria.
+        _player->CleanupsBeforeDelete();
 
         SetPlayer(nullptr); // pointer already deleted
 
