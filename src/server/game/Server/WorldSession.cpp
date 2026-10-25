@@ -844,37 +844,17 @@ void WorldSession::LogoutPlayer(bool save, bool redirecting)
 
         ObjectGuid const playerGuid = _player->GetGUID();
 
-        // --- FIX CORE LEGACY: GESTIÓN SEGURA DE MEMORIA DE BOTS Y MAPAS ---
-        
-        // 1. LIMPIEZA DE IA: Asegurar que PlayerbotMgr elimine las referencias
-        // a este bot antes de que la memoria sea liberada.
-        if (PlayerbotAI* botAI = _player->GetPlayerbotAI())
-        {
-            if (Group* group = _player->GetGroup())
-            {
-                if (Player* master = botAI->GetGroupMaster())
-                {
-                    if (PlayerbotAI* masterAI = master->GetPlayerbotAI())
-                    {
-                        masterAI->RemoveBotFromGroup(_player);
-                    }
-                }
-            }
-            botAI->SetPaused(true); 
-            botAI->Reset();
-        }
-
-        // 2. Forzar la salida del Battleground ANTES de limpiar la memoria.
+        // 1. Forzar salida de Battlegrounds con los 6 argumentos requeridos.
         if (Battleground* bg = _player->GetBattleground())
         {
             bg->RemovePlayerAtLeave(_player);
-            _player->SetBattlegroundId(0, BATTLEGROUND_TYPE_NONE);
+            _player->SetBattlegroundId(0, BATTLEGROUND_TYPE_NONE, 0, false, false, TEAM_NEUTRAL);
         }
 
-        // 3. Limpiar la memoria interna del jugador de forma segura.
+        // 2. Limpiar memoria de forma segura.
         _player->CleanupsBeforeDelete();
 
-        // 4. Retirar físicamente del mapa pasando 'false' para evitar doble limpieza
+        // 3. Retirar del mapa sin doble limpieza.
         if (Map* _map = _player->FindMap())
         {
             _map->RemovePlayerFromMap(_player, false);
