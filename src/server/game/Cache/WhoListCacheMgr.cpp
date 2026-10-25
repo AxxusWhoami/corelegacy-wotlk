@@ -36,7 +36,21 @@ void WhoListCacheMgr::Update()
 
     for (auto const& [guid, player] : ObjectAccessor::GetPlayers())
     {
-        if (!player->FindMap() || player->GetSession()->PlayerLoading())
+        // Blindaje Nivel 1: Validar integridad del objeto Player y su presencia real en el mundo
+        if (!player || !player->IsInWorld() || !player->FindMap())
+            continue;
+
+        // Blindaje Nivel 2: Extracción segura del puntero de sesión
+        WorldSession* session = player->GetSession();
+        if (!session)
+            continue;
+
+        // Blindaje Nivel 3: Mitigación específica para memory leaks de mod-playerbots
+        // Descomenta la siguiente línea si los bots están causando el crash al dejar sesiones colgadas
+        // if (player->IsBot()) continue; 
+
+        // Validación original ahora protegida contra accesos prematuros
+        if (session->PlayerLoading())
             continue;
 
         std::string playerName = player->GetName();
@@ -55,7 +69,8 @@ void WhoListCacheMgr::Update()
 
         wstrToLower(wideGuildName);
 
-        _whoListStorage.emplace_back(player->GetGUID(), player->GetTeamId(), player->GetSession()->GetSecurity(), player->GetLevel(),
+        // Se reutiliza la variable 'session' validada previamente en lugar de encadenar player->GetSession() nuevamente
+        _whoListStorage.emplace_back(player->GetGUID(), player->GetTeamId(), session->GetSecurity(), player->GetLevel(),
             player->getClass(), player->getRace(),
             (player->IsSpectator() ? AREA_DALARAN : player->GetZoneId()), player->getGender(), player->IsVisible(),
             widePlayerName, wideGuildName, playerName, guildName);
