@@ -844,26 +844,37 @@ void WorldSession::LogoutPlayer(bool save, bool redirecting)
 
         ObjectGuid const playerGuid = _player->GetGUID();
 
-        //! Remove the player from the world
-        // the player may not be in the world when logging out
-        // e.g if he got disconnected during a transfer to another map
-        // calls to GetMap in this case may cause crashes
+        // --- FIX CORE LEGACY: GESTIÓN SEGURA DE MEMORIA DE BOTS Y MAPAS ---
         
-        // 1. Forzar la salida del Battleground ANTES de limpiar la memoria.
-        // Esto permite que el bot reciba auras (como la resurrección) de forma segura.
+        // 1. LIMPIEZA DE IA: Asegurar que PlayerbotMgr elimine las referencias
+        // a este bot antes de que la memoria sea liberada.
+        if (PlayerbotAI* botAI = _player->GetPlayerbotAI())
+        {
+            if (Group* group = _player->GetGroup())
+            {
+                if (Player* master = botAI->GetGroupMaster())
+                {
+                    if (PlayerbotAI* masterAI = master->GetPlayerbotAI())
+                    {
+                        masterAI->RemoveBotFromGroup(_player);
+                    }
+                }
+            }
+            botAI->SetPaused(true); 
+            botAI->Reset();
+        }
+
+        // 2. Forzar la salida del Battleground ANTES de limpiar la memoria.
         if (Battleground* bg = _player->GetBattleground())
         {
             bg->RemovePlayerAtLeave(_player);
-            // Anulamos el ID de BG del jugador. Esto es vital para que 
-            // BattlegroundMap::RemovePlayerFromMap no intente procesarlo por segunda vez.
             _player->SetBattlegroundId(0, BATTLEGROUND_TYPE_NONE);
         }
 
-        // 2. Ahora sí, limpiar la memoria interna del jugador de forma segura.
+        // 3. Limpiar la memoria interna del jugador de forma segura.
         _player->CleanupsBeforeDelete();
 
-        // 3. Retirar físicamente del mapa.
-        // IMPORTANTE: Pasamos 'false' para que la clase Map no ejecute CleanupsBeforeDelete otra vez.
+        // 4. Retirar físicamente del mapa pasando 'false' para evitar doble limpieza
         if (Map* _map = _player->FindMap())
         {
             _map->RemovePlayerFromMap(_player, false);
