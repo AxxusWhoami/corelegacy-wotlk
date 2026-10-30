@@ -334,11 +334,19 @@ void CombatManager::SuppressPvPCombat()
 
 void CombatManager::EndAllPvECombat()
 {
-    // cannot have threat without combat
-    _owner->GetThreatMgr().RemoveMeFromThreatLists();
-    _owner->GetThreatMgr().ClearAllThreat();
-    while (!_pveRefs.empty())
-        _pveRefs.begin()->second->EndCombat();
+    std::vector<CombatReference*> toRemove;
+    for (CombatReference* ref : m_pveCombatReferences)
+    {
+        if (!ref || !ref->GetOtherUnit() || !ref->GetOtherUnit()->IsInWorld())
+            continue;
+            
+        toRemove.push_back(ref);
+    }
+
+    for (CombatReference* ref : toRemove)
+    {
+        ref->EndCombat();
+    }
 }
 
 void CombatManager::RevalidateCombat()
