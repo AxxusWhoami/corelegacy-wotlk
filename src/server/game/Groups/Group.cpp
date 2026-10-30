@@ -1761,7 +1761,6 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                     else
                     {
                         uint32 mailOnFull = sWorld->getIntConfig(CONFIG_LFG_MAIL_ITEM_ON_FULL_INVENTORY);
-                        if (msg == EQUIP_ERR_INVENTORY_FULL && (mailOnFull == MAIL_ITEM_ON_FULL_INVENTORY_EVERYWHERE || (mailOnFull == MAIL_ITEM_ON_FULL_INVENTORY_LFG_ONLY && isLFGGroup())))
                         if (ShouldMailRollWonItem(this, roll, msg))
                         {
                             item->is_looted = true;
@@ -1855,7 +1854,6 @@ void Group::CountTheRoll(Rolls::iterator rollI)
                         else
                         {
                             uint32 mailOnFull = sWorld->getIntConfig(CONFIG_LFG_MAIL_ITEM_ON_FULL_INVENTORY);
-                            if (msg == EQUIP_ERR_INVENTORY_FULL && (mailOnFull == MAIL_ITEM_ON_FULL_INVENTORY_EVERYWHERE || (mailOnFull == MAIL_ITEM_ON_FULL_INVENTORY_LFG_ONLY && isLFGGroup())))
                             if (ShouldMailRollWonItem(this, roll, msg))
                             {
                                 item->is_looted = true;
