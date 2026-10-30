@@ -686,9 +686,6 @@ ThreatReference const* ThreatManager::ReselectVictim()
 
 void ThreatManager::ProcessAIUpdates()
 {
-	if (_owner->GetTypeId() == TYPEID_PLAYER)
-		return;
-
     CreatureAI* ai = ASSERT_NOTNULL(_owner->ToCreature())->AI();
     std::vector<ObjectGuid> v(std::move(_needsAIUpdate)); // _needsAIUpdate is now empty in case this triggers a recursive call
     if (!ai)
