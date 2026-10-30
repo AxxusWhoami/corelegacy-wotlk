@@ -45,8 +45,6 @@
 
 #define GROUP_GUARD std::lock_guard<std::recursive_mutex> _groupLockGuard(m_groupLock)
 
-Roll::Roll(ObjectGuid _guid, LootItem const& li) : itemGUID(_guid), itemid(li.itemid),
-    itemRandomPropId(li.randomPropertyId), itemRandomSuffix(li.randomSuffix), itemCount(li.count),
 Roll::Roll(ObjectGuid _guid, LootItem const& li, bool _lootedInRaid) : itemGUID(_guid), itemid(li.itemid),
     itemRandomPropId(li.randomPropertyId), itemRandomSuffix(li.randomSuffix), itemCount(li.count), lootedInRaid(_lootedInRaid),
     totalPlayersRolling(0), totalNeed(0), totalGreed(0), totalPass(0), itemSlot(0),
