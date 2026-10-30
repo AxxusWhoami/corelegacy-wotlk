@@ -568,9 +568,6 @@ void ThreatManager::ResetAllThreat()
 
 void ThreatManager::ClearThreat(Unit* target)
 {
-    if (!target || !target->IsInWorld())
-        return;
-
     auto it = _myThreatListEntries.find(target->GetGUID());
     if (it != _myThreatListEntries.end())
         ClearThreat(it->second);
