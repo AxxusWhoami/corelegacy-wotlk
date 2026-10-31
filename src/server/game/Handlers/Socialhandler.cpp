@@ -43,6 +43,12 @@ void WorldSession::HandleAddFriendOpcode(WorldPacket& recv_data)
     recv_data >> friendName;
     recv_data >> friendNote;
 
+    // PARCHE DE SEGURIDAD: Prevenir desbordamientos de memoria desde el cliente
+    if (friendNote.length() > 50) {
+        LOG_ERROR("network", "HandleAddFriendOpcode: Player {} tried to send a friend note of length {}. Truncated.", GetPlayer()->GetGUID().ToString(), friendNote.length());
+        friendNote = friendNote.substr(0, 50);
+    }
+
     if (!normalizePlayerName(friendName))
         return;
 
@@ -150,5 +156,12 @@ void WorldSession::HandleSetContactNotesOpcode(WorldPacket& recv_data)
     ObjectGuid guid;
     std::string note;
     recv_data >> guid >> note;
+
+    // PARCHE DE SEGURIDAD: Prevenir inyección de memoria masiva al actualizar nota
+    if (note.length() > 50) {
+        LOG_ERROR("network", "HandleSetContactNotesOpcode: Player {} tried to set a friend note of length {}. Truncated.", GetPlayer()->GetGUID().ToString(), note.length());
+        note = note.substr(0, 50);
+    }
+
     _player->GetSocial()->SetFriendNote(guid, note);
 }

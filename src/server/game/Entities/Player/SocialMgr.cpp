@@ -159,7 +159,15 @@ void PlayerSocial::SendSocialList(Player* player, uint32 flags)
 
         data << itr.first;                                    // player guid
         data << uint32(contactFlags);                         // player flag (0x1 = Friend, 0x2 = Ignored, 0x4 = Muted)
-        data << friendInfo.Note;                              // string note
+
+        // SECURITY PATCH: Truncate note to prevent ByteBuffer overflow and std::length_error
+        std::string safeNote = friendInfo.Note;
+        if (safeNote.length() > 50) {
+            LOG_ERROR("network", "Player {} tried to send corrupted friend note of length {}. Truncated.", player->GetGUID().ToString(), safeNote.length());
+            safeNote = safeNote.substr(0, 50);
+        }
+        data << safeNote;                                     // string note safe
+
         if (contactFlags & SOCIAL_FLAG_FRIEND)                // if IsFriend()
         {
             data << uint8(friendInfo.Status);                 // online/offline/etc?
@@ -272,8 +280,13 @@ void SocialMgr::SendFriendStatus(Player* player, FriendsResult result, ObjectGui
     {
         case FRIEND_ADDED_OFFLINE:
         case FRIEND_ADDED_ONLINE:
-            data << fi.Note;
+        {
+            // SECURITY PATCH: Truncate note here as well
+            std::string safeNote = fi.Note;
+            if (safeNote.length() > 50) safeNote = safeNote.substr(0, 50);
+            data << safeNote;
             break;
+        }
         default:
             break;
     }
@@ -344,6 +357,11 @@ PlayerSocial* SocialMgr::LoadFromDB(PreparedQueryResult result, ObjectGuid const
         auto friendGuid = ObjectGuid::Create<HighGuid::Player>(fields[0].Get<uint32>());
         auto flags = fields[1].Get<uint8>();
         auto note = fields[2].Get<std::string>();
+
+        // PARCHE DE SEGURIDAD: Prevenir corrupción desde la carga de DB
+        if (note.length() > 50) {
+            note = note.substr(0, 50);
+        }
 
         social->m_playerSocialMap[friendGuid] = FriendInfo(flags, note);
     } while (result->NextRow());
