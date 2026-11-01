@@ -1731,12 +1731,19 @@ void Map::SendObjectUpdates()
 {
     UpdateDataMapType update_players;
 
-    while (!_updateObjects.empty())
-    {
-        Object* obj = *_updateObjects.begin();
-        ASSERT(obj->IsInWorld());
+    if (_updateObjects.empty())
+        return;
 
-        _updateObjects.erase(_updateObjects.begin());
+    // BLINDAJE: Extraemos todos los objetos de golpe mediante un swap atómico
+    // para evitar corrupción si otro hilo intenta modificar _updateObjects en este instante.
+    std::unordered_set<Object*> updateObjectsSnapshot;
+    updateObjectsSnapshot.swap(_updateObjects);
+
+    for (Object* obj : updateObjectsSnapshot)
+    {
+        if (!obj || !obj->IsInWorld())
+            continue;
+
         obj->BuildUpdate(update_players);
     }
 
