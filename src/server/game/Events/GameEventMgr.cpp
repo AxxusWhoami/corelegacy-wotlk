@@ -1895,7 +1895,8 @@ public:
     void Visit(std::unordered_map<ObjectGuid, Creature*>& creatureMap)
     {
         for (auto const& p : creatureMap)
-            if (p.second->IsInWorld() && !p.second->IsDuringRemoveFromWorld() && p.second->FindMap() && p.second->IsAIEnabled && p.second->AI())
+            // Añadir p.second != nullptr antes de llamar a sus métodos
+            if (p.second && p.second->IsInWorld() && !p.second->IsDuringRemoveFromWorld() && p.second->FindMap() && p.second->IsAIEnabled && p.second->AI())
                 p.second->AI()->sOnGameEvent(_activate, _eventId);
     }
 
