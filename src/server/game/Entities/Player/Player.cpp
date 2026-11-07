@@ -16674,7 +16674,7 @@ float Player::GetSightRange(WorldObject const* target) const
 bool Player::IsWorldObjectOutOfSightRange(WorldObject const* target) const
 {
     // Abort if the pointer is invalid or the object is actively despawning
-    if (!target || !target->IsInWorld() || target->IsDuringRemoveFromWorld())
+    if (!target || !target->IsInWorld())
         return true;
 
     // Special handling for Infinite visibility override objects -> they are zone wide visible
