@@ -122,7 +122,8 @@ Group::Group() : m_leaderName(""), m_groupType(GROUPTYPE_NORMAL),
     m_bfGroup(nullptr), m_bgGroup(nullptr), m_lootMethod(FREE_FOR_ALL), m_lootThreshold(ITEM_QUALITY_UNCOMMON),
     m_subGroupsCounts(nullptr), m_counter(0), m_maxEnchantingLevel(0), m_lfgGroupFlags(0),
     _difficultyChangePreventionTime(0),
-    _difficultyChangePreventionType(DIFFICULTY_PREVENTION_CHANGE_NONE)
+    _difficultyChangePreventionType(DIFFICULTY_PREVENTION_CHANGE_NONE),
+    m_isDisbanding(false)
 {
     sScriptMgr->OnConstructGroup(this);
 }
@@ -871,10 +872,20 @@ void Group::ForcedDisband(bool hideDestroy /* = false */)
     GROUP_GUARD;
     sScriptMgr->OnGroupDisband(this);
 
-    // Settle open rolls: only CountTheRoll unblocks a rolled item, and the looted object's roll timer
-    // can't once the group is gone, so the item would stay locked
+    // Parche de reentrancia: evitar doble destrucción del grupo
+    if (m_isDisbanding)
+        return;
+    m_isDisbanding = true;
+
+    // Limpiamos las tiradas de dados pendientes forzosamente para evitar bucles infinitos.
+    // Como el grupo se está disolviendo, nadie podrá ganar el objeto de todos modos.
     while (!RollId.empty())
-        CountTheRoll(RollId.begin());
+    {
+        Rolls::iterator itr = RollId.begin();
+        Roll* r = *itr;
+        RollId.erase(itr);
+        delete r;
+    }
 
     Player* player;
     uint32 instanceId = 0;

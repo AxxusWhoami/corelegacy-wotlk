@@ -390,6 +390,8 @@ protected:
     std::atomic<uint32> _difficultyChangePreventionTime;
     std::atomic<DifficultyPreventionChangeType> _difficultyChangePreventionType;
 
+	bool m_isDisbanding;
+
     // Serializes access to the shared containers (m_memberSlots, m_invitees, RollId, subgroup counters, targeting icons)
     // Recursive because several public methods call other public methods on the same Group instance.
     mutable std::recursive_mutex m_groupLock;
