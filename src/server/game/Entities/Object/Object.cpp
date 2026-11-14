@@ -296,30 +296,45 @@ void Object::DestroyForPlayer(Player* target, bool onDeath) const
 
 [[nodiscard]] int32 Object::GetInt32Value(uint16 index) const
 {
+    if (!m_int32Values)
+        return 0;
+
     ASSERT(index < m_valuesCount || PrintIndexError(index, false));
     return m_int32Values[index];
 }
 
 [[nodiscard]] uint32 Object::GetUInt32Value(uint16 index) const
 {
+    if (!m_uint32Values)
+        return 0;
+
     ASSERT(index < m_valuesCount || PrintIndexError(index, false));
     return m_uint32Values[index];
 }
 
 [[nodiscard]] uint64 Object::GetUInt64Value(uint16 index) const
 {
+    if (!m_uint32Values)
+        return 0;
+
     ASSERT(index + 1 < m_valuesCount || PrintIndexError(index, false));
     return *((uint64*) &(m_uint32Values[index]));
 }
 
 [[nodiscard]] float Object::GetFloatValue(uint16 index) const
 {
+    if (!m_floatValues)
+        return 0.0f;
+
     ASSERT(index < m_valuesCount || PrintIndexError(index, false));
     return m_floatValues[index];
 }
 
 [[nodiscard]] uint8 Object::GetByteValue(uint16 index, uint8 offset) const
 {
+    if (!m_uint32Values)
+        return 0;
+
     ASSERT(index < m_valuesCount || PrintIndexError(index, false));
     ASSERT(offset < 4);
     return *(((uint8*) &m_uint32Values[index]) + offset);
@@ -327,6 +342,9 @@ void Object::DestroyForPlayer(Player* target, bool onDeath) const
 
 [[nodiscard]] uint16 Object::GetUInt16Value(uint16 index, uint8 offset) const
 {
+    if (!m_uint32Values)
+        return 0;
+
     ASSERT(index < m_valuesCount || PrintIndexError(index, false));
     ASSERT(offset < 2);
     return *(((uint16*) &m_uint32Values[index]) + offset);
@@ -334,6 +352,9 @@ void Object::DestroyForPlayer(Player* target, bool onDeath) const
 
 [[nodiscard]] ObjectGuid Object::GetGuidValue(uint16 index) const
 {
+    if (!m_uint32Values)
+        return ObjectGuid::Empty;
+
     ASSERT(index + 1 < m_valuesCount || PrintIndexError(index, false));
     return *((ObjectGuid*) &(m_uint32Values[index]));
 }
@@ -879,6 +900,9 @@ void Object::ToggleFlag(uint16 index, uint32 flag)
 
 [[nodiscard]] bool Object::HasFlag(uint16 index, uint32 flag) const
 {
+    if (!m_uint32Values)
+        return false;
+
     if (index >= m_valuesCount && !PrintIndexError(index, false))
     {
         return false;
@@ -939,6 +963,9 @@ void Object::RemoveByteFlag(uint16 index, uint8 offset, uint8 oldFlag)
 
 [[nodiscard]] bool Object::HasByteFlag(uint16 index, uint8 offset, uint8 flag) const
 {
+    if (!m_uint32Values)
+        return false;
+
     ASSERT(index < m_valuesCount || PrintIndexError(index, false));
     ASSERT(offset < 4);
     return (((uint8*) &m_uint32Values[index])[offset] & flag) != 0;
@@ -2903,7 +2930,7 @@ void WorldObject::GetChargeContactPoint(WorldObject const* obj, float& x, float&
 
 [[nodiscard]] float WorldObject::GetObjectSize() const
 {
-    return (m_valuesCount > UNIT_FIELD_COMBATREACH) ? m_floatValues[UNIT_FIELD_COMBATREACH] : DEFAULT_WORLD_OBJECT_SIZE * GetObjectScale();
+    return (m_floatValues && m_valuesCount > UNIT_FIELD_COMBATREACH) ? m_floatValues[UNIT_FIELD_COMBATREACH] : DEFAULT_WORLD_OBJECT_SIZE * GetObjectScale();
 }
 
 void WorldObject::MovePosition(Position& pos, float dist, float angle)
