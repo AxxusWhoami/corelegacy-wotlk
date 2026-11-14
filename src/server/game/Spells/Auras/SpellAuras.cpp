@@ -275,6 +275,17 @@ Aura* Aura::TryRefreshStackOrCreate(SpellInfo const* spellproto, uint8 tryEffMas
     ASSERT_NODEBUGINFO(tryEffMask <= MAX_EFFECT_MASK);
     if (refresh)
         *refresh = false;
+
+    if (Unit* unitOwner = owner->ToUnit())
+    {
+        if (unitOwner->IsDuringRemoveFromWorld())
+            return nullptr;
+
+        if (Player* playerOwner = unitOwner->ToPlayer())
+            if (playerOwner->GetSession() && playerOwner->GetSession()->PlayerLogout())
+                return nullptr;
+    }
+
     uint8 effMask = Aura::BuildEffectMaskForOwner(spellproto, tryEffMask, owner);
     if (!effMask)
         return nullptr;
@@ -332,10 +343,25 @@ Aura* Aura::Create(SpellInfo const* spellproto, uint8 effMask, WorldObject* owne
 
     // check if aura can be owned by owner
     if (owner->IsUnit())
-        if (!owner->IsInWorld() || ((Unit*)owner)->IsDuringRemoveFromWorld())
+    {
+        Unit* unitOwner = owner->ToUnit();
+
+        // Never create auras on a unit that has already run CleanupsBeforeDelete()
+        // or on a player currently mid-logout (e.g. Battleground::RemovePlayerAtLeave resurrecting a dead player)
+        if (unitOwner->IsDuringRemoveFromWorld())
+            return nullptr;
+
+        if (Player* playerOwner = unitOwner->ToPlayer())
+            if (playerOwner->GetSession() && playerOwner->GetSession()->PlayerLogout())
+                return nullptr;
+
+        if (!owner->IsInWorld() || unitOwner->IsDuringRemoveFromWorld())
+        {
             // owner not in world so don't allow to own not self casted single target auras
             if (casterGUID != owner->GetGUID() && spellproto->IsSingleTarget())
                 return nullptr;
+        }
+    }
 
     Aura* aura = nullptr;
     switch (owner->GetTypeId())

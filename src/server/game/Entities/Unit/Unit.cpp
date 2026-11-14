@@ -1383,6 +1383,9 @@ SpellCastResult Unit::CastSpell(SpellCastTargets const& targets, SpellInfo const
         return SPELL_FAILED_SPELL_UNAVAILABLE;
     }
 
+    if (m_cleanupDone)
+        return SPELL_FAILED_DONT_REPORT;
+
     /// @todo: this is a workaround - not needed anymore, but required for some scripts :(
     if (!originalCaster && triggeredByAura)
     {
@@ -4477,7 +4480,13 @@ Aura* Unit::_TryStackingOrRefreshingExistingAura(SpellInfo const* newAura, uint8
 
 void Unit::_AddAura(UnitAura* aura, Unit* caster)
 {
-    ASSERT(!m_cleanupDone);
+    if (m_cleanupDone)
+    {
+        aura->_Remove(AURA_REMOVE_BY_DEFAULT);
+        m_removedAuras.push_back(aura);
+        return;
+    }
+
     m_ownedAuras.insert(AuraMap::value_type(aura->GetId(), aura));
 
     _RemoveNoStackAurasDueToAura(aura, true);
@@ -4517,7 +4526,9 @@ void Unit::_AddAura(UnitAura* aura, Unit* caster)
 AuraApplication* Unit::_CreateAuraApplication(Aura* aura, uint8 effMask)
 {
     // can't apply aura on unit which is going to be deleted - to not create a memory leak
-    ASSERT(!m_cleanupDone);
+    if (m_cleanupDone)
+        return nullptr;
+
     // aura musn't be removed
     ASSERT(!aura->IsRemoved());
 

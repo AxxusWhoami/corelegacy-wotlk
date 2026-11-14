@@ -1875,6 +1875,9 @@ void Player::UpdateTitansGrip()
 
 void Player::UpdateZoneDependentAuras(uint32 newZone)
 {
+    if (!IsInWorld() || IsDuringRemoveFromWorld())
+        return;
+
     // Some spells applied at enter into zone (with subzones), aura removed in
     // UpdateAreaDependentAuras that called always at zone->area update
     SpellAreaForAreaMapBounds saBounds =
