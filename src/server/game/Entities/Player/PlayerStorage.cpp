@@ -6893,6 +6893,28 @@ void Player::PrettyPrintRequirementsItemsList(std::vector<ProgressionRequirement
 
 bool Player::Satisfy(DungeonProgressionRequirements const* ar, uint32 target_map, bool report)
 {
+    // [MOD] Evitar que bots solitarios colapsen el MapMgr al tocar portales
+    if (this->GetSession() && this->GetSession()->IsHeadless()) 
+    {
+        MapEntry const* targetMapEntry = sMapStore.LookupEntry(target_map);
+        if (targetMapEntry && targetMapEntry->IsDungeon())
+        {
+            Group* group = this->GetGroup();
+            // Rechazar si el bot no tiene grupo
+            if (!group)
+            {
+                return false; 
+            }
+            
+            // Rechazar si el líder de su grupo está desconectado o también es un bot
+            Player* leader = ObjectAccessor::FindPlayer(group->GetLeaderGUID());
+            if (!leader || (leader->GetSession() && leader->GetSession()->IsHeadless()))
+            {
+                return false; 
+            }
+        }
+    }
+
     if (!IsGameMaster() && ar)
     {
         uint8 LevelMin = 0;
