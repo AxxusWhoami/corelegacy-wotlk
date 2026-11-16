@@ -9571,17 +9571,22 @@ void Player::StopCastingCharm(Aura* except /*= nullptr*/)
 
     if (GetCharmGUID())
     {
-        LOG_FATAL("entities.player", "Player {} ({} is not able to uncharm unit ({})", GetName(), GetGUID().ToString(), GetCharmGUID().ToString());
+        // Downgraded from LOG_FATAL to LOG_ERROR to prevent crash handling loops
+        LOG_ERROR("entities.player", "Player {} ({}) is not able to cleanly uncharm unit ({}).", GetName(), GetGUID().ToString(), GetCharmGUID().ToString());
 
         if (charm->GetCharmerGUID())
         {
-            LOG_FATAL("entities.player", "Charmed unit has charmer {}", charm->GetCharmerGUID().ToString());
-            ABORT();
+            LOG_ERROR("entities.player", "Charmed unit still has charmer {}. Bypassing ABORT() and forcing decouple.", charm->GetCharmerGUID().ToString());
+
+            // Forcefully remove the charmer linkage from the unit side if it is a creature
+            if (charm->GetTypeId() == TYPEID_UNIT)
+            {
+                charm->ToCreature()->RemoveCharmedBy(this);
+            }
         }
-        else
-        {
-            SetCharm(charm, false);
-        }
+
+        // Always force clear the charm state on the player side
+        SetCharm(charm, false);
     }
 }
 
