@@ -185,6 +185,13 @@ namespace lfg
             LOG_DEBUG("lfg", "newToQueueStore: {}, front: {}", newGuid.ToString(), pushCompatiblesToFront ? 1 : 0);
             RemoveFromNewQueue(newGuid);
 
+            // Parche: evitar procesar GUIDs que ya fueron eliminados de QueueDataStore
+            if (QueueDataStore.find(newGuid) == QueueDataStore.end())
+            {
+                RemoveFromQueue(newGuid);
+                return newGroupsProcessed;
+            }
+
             FindNewGroups(newGuid);
 
             CompatibleList.splice((pushCompatiblesToFront ? CompatibleList.begin() : CompatibleList.end()), CompatibleTempList);
@@ -197,6 +204,13 @@ namespace lfg
 
     LfgCompatibility LFGQueue::FindNewGroups(ObjectGuid const& newGuid)
     {
+        // Parche: cortar de raiz si el GUID ya no existe en la cola activa
+        if (QueueDataStore.find(newGuid) == QueueDataStore.end())
+        {
+            RemoveFromQueue(newGuid);
+            return LFG_COMPATIBILITY_PENDING;
+        }
+
         // each combination of dps+heal+tank (tank*8 + heal+4 + dps) has a value assigned 0..15
         // first 16 bits of the mask are for marking if such combination was found once, second 16 bits for marking second occurence of that combination, etc
         uint64 foundMask = 0;
@@ -237,6 +251,11 @@ namespace lfg
             LfgCompatibility compatibility = CheckCompatibility(*itr, newGuid, foundMask, foundCount, currentCompatibles);
             if (compatibility == LFG_COMPATIBLES_MATCH)
                 return LFG_COMPATIBLES_MATCH;
+
+            // Parche: detener el bucle si newGuid fue purgado en CheckCompatibility
+            if (compatibility == LFG_COMPATIBILITY_PENDING && QueueDataStore.find(newGuid) == QueueDataStore.end())
+                return LFG_COMPATIBILITY_PENDING;
+
             if ((foundMask & 0x3FFF3FFF3FFF3FFF) == 0x3FFF3FFF3FFF3FFF) // each combination of dps+heal+tank already found 4 times
                 break;
         }
