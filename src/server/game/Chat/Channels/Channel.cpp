@@ -157,6 +157,9 @@ void Channel::CleanOldChannelsInDB()
 
 void Channel::JoinChannel(Player* player, std::string const& pass)
 {
+    if (!player)
+        return;
+
     ObjectGuid guid = player->GetGUID();
     if (IsOn(guid))
     {
@@ -249,6 +252,9 @@ void Channel::JoinChannel(Player* player, std::string const& pass)
 
 void Channel::LeaveChannel(Player* player, bool send)
 {
+    if (!player)
+        return;
+
     ObjectGuid guid = player->GetGUID();
     if (!IsOn(guid))
     {
@@ -296,6 +302,9 @@ void Channel::LeaveChannel(Player* player, bool send)
                 ObjectGuid newowner;
                 for (Channel::PlayerContainer::const_iterator itr = playersStore.begin(); itr != playersStore.end(); ++itr)
                 {
+                    if (!itr->second.plrPtr || !itr->second.plrPtr->GetSession())
+                        continue;
+
                     newowner = itr->second.player;
                     if (itr->second.plrPtr->GetSession()->HasPermission(rbac::RBAC_PERM_CHANGE_CHANNEL_NOT_MODERATOR))
                         _isOwnerGM = true;
@@ -406,7 +415,7 @@ void Channel::KickOrBan(Player const* player, std::string const& badname, bool b
             return;
         }
 
-        if (isBadConstantModerator || bad->GetSession()->HasPermission(rbac::RBAC_PERM_CHANGE_CHANNEL_NOT_MODERATOR))
+        if (isBadConstantModerator || (bad && bad->GetSession() && bad->GetSession()->HasPermission(rbac::RBAC_PERM_CHANGE_CHANNEL_NOT_MODERATOR)))
         {
             WorldPacket data;
             MakeNotModerator(&data);
@@ -440,9 +449,12 @@ void Channel::KickOrBan(Player const* player, std::string const& badname, bool b
     if (isOnChannel)
     {
         playersStore.erase(victim);
-        bad->LeftChannel(this);
-        RemoveWatching(bad);
-        LeaveNotify(bad);
+        if (bad)
+        {
+            bad->LeftChannel(this);
+            RemoveWatching(bad);
+            LeaveNotify(bad);
+        }
     }
 
     if (changeowner && _ownership)
@@ -454,6 +466,9 @@ void Channel::KickOrBan(Player const* player, std::string const& badname, bool b
             ObjectGuid newowner;
             for (Channel::PlayerContainer::const_iterator itr = playersStore.begin(); itr != playersStore.end(); ++itr)
             {
+                if (!itr->second.plrPtr || !itr->second.plrPtr->GetSession())
+                    continue;
+
                 newowner = itr->second.player;
                 if (!itr->second.plrPtr->GetSession()->HasPermission(rbac::RBAC_PERM_CHANGE_CHANNEL_NOT_MODERATOR))
                     break;
@@ -853,7 +868,7 @@ void Channel::Invite(Player const* player, std::string const& newname)
         return;
     }
 
-    if (!newp->GetSocial()->HasIgnore(guid))
+    if (!newp->GetSocial() || !newp->GetSocial()->HasIgnore(guid))
     {
         WorldPacket data;
         MakeInvite(&data, guid);
@@ -875,7 +890,8 @@ void Channel::SetOwner(ObjectGuid guid, bool exclaim)
         if (p_itr != playersStore.end())
         {
             p_itr->second.SetOwner(false);
-            FlagsNotify(p_itr->second.plrPtr);
+            if (p_itr->second.plrPtr)
+                FlagsNotify(p_itr->second.plrPtr);
         }
     }
 
@@ -887,7 +903,8 @@ void Channel::SetOwner(ObjectGuid guid, bool exclaim)
         pinfo.SetModerator(true);
         uint8 oldFlag = pinfo.flags;
         pinfo.SetOwner(true);
-        FlagsNotify(pinfo.plrPtr);
+        if (pinfo.plrPtr)
+            FlagsNotify(pinfo.plrPtr);
 
         Player* player = ObjectAccessor::FindPlayer(_ownerGUID);
         if (player)
@@ -913,15 +930,17 @@ void Channel::SetOwner(ObjectGuid guid, bool exclaim)
 void Channel::SendToAll(WorldPacket* data, ObjectGuid guid)
 {
     for (PlayerContainer::const_iterator i = playersStore.begin(); i != playersStore.end(); ++i)
-        if (!guid || !i->second.plrPtr->GetSocial()->HasIgnore(guid))
-            i->second.plrPtr->SendDirectMessage(data);
+        if (Player* player = i->second.plrPtr)
+            if (!guid || !player->GetSocial() || !player->GetSocial()->HasIgnore(guid))
+                player->SendDirectMessage(data);
 }
 
 void Channel::SendToAllButOne(WorldPacket* data, ObjectGuid who)
 {
     for (PlayerContainer::const_iterator i = playersStore.begin(); i != playersStore.end(); ++i)
-        if (i->first != who)
-            i->second.plrPtr->SendDirectMessage(data);
+        if (Player* player = i->second.plrPtr)
+            if (i->first != who)
+                player->SendDirectMessage(data);
 }
 
 void Channel::SendToOne(WorldPacket* data, ObjectGuid who)
@@ -933,11 +952,15 @@ void Channel::SendToOne(WorldPacket* data, ObjectGuid who)
 void Channel::SendToAllWatching(WorldPacket* data)
 {
     for (PlayersWatchingContainer::const_iterator i = playersWatchingStore.begin(); i != playersWatchingStore.end(); ++i)
-        (*i)->SendDirectMessage(data);
+        if (*i)
+            (*i)->SendDirectMessage(data);
 }
 
 bool Channel::ShouldAnnouncePlayer(Player const* player) const
 {
+    if (!player || !player->GetSession())
+        return false;
+
     return !(player->GetSession()->HasPermission(rbac::RBAC_PERM_SILENTLY_JOIN_CHANNEL) && sWorld->getBoolConfig(CONFIG_SILENTLY_GM_JOIN_TO_CHANNEL));
 }
 
@@ -1162,6 +1185,8 @@ void Channel::MakeVoiceOff(WorldPacket* data, ObjectGuid guid)
 
 void Channel::JoinNotify(Player* p)
 {
+    if (!p || !p->GetSession())
+        return;
     if (_channelRights.flags & CHANNEL_RIGHT_CANT_SPEAK)
         return;
     if (p->GetSession()->HasPermission(rbac::RBAC_PERM_SILENTLY_JOIN_CHANNEL))
@@ -1179,6 +1204,8 @@ void Channel::JoinNotify(Player* p)
 
 void Channel::LeaveNotify(Player* p)
 {
+    if (!p || !p->GetSession())
+        return;
     if (_channelRights.flags & CHANNEL_RIGHT_CANT_SPEAK)
         return;
     if (p->GetSession()->HasPermission(rbac::RBAC_PERM_SILENTLY_JOIN_CHANNEL))
@@ -1195,6 +1222,8 @@ void Channel::LeaveNotify(Player* p)
 
 void Channel::FlagsNotify(Player* p)
 {
+    if (!p || !p->GetSession())
+        return;
     if (_channelRights.flags & CHANNEL_RIGHT_CANT_SPEAK)
         return;
     if (p->GetSession()->HasPermission(rbac::RBAC_PERM_SILENTLY_JOIN_CHANNEL))
@@ -1212,7 +1241,7 @@ void Channel::FlagsNotify(Player* p)
 
 void Channel::AddWatching(Player* p)
 {
-    if (!IsOn(p->GetGUID()))
+    if (!p || !IsOn(p->GetGUID()))
         return;
     playersWatchingStore.insert(p);
 }
