@@ -2324,6 +2324,34 @@ void InstanceMap::PermBindAllPlayers()
 
 void InstanceMap::UnloadAll()
 {
+    if (HavePlayers())
+    {
+        LOG_ERROR("maps", "InstanceMap::UnloadAll: Map {} (Instance {}) still has {} player(s)/bot(s). Forcing eviction before unload.",
+            GetId(), GetInstanceId(), m_mapRefMgr.getSize());
+
+        std::vector<Player*> playersToEvict;
+        playersToEvict.reserve(m_mapRefMgr.getSize());
+
+        for (MapRefMgr::iterator itr = m_mapRefMgr.begin(); itr != m_mapRefMgr.end(); ++itr)
+        {
+            if (Player* player = itr->GetSource())
+                playersToEvict.push_back(player);
+        }
+
+        for (Player* player : playersToEvict)
+        {
+            if (!player->IsBeingTeleportedFar())
+                player->TeleportTo(player->m_homebindMapId, player->m_homebindX, player->m_homebindY, player->m_homebindZ, player->GetOrientation());
+
+            if (player->IsInGrid())
+                RemovePlayerFromMap(player, false);
+            else if (player->IsInWorld())
+                player->RemoveFromWorld();
+
+            player->ResetMap();
+        }
+    }
+
     ASSERT(!HavePlayers());
 
     if (m_resetAfterUnload)
