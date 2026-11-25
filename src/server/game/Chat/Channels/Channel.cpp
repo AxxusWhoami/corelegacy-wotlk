@@ -868,7 +868,8 @@ void Channel::Invite(Player const* player, std::string const& newname)
         return;
     }
 
-    if (!newp->GetSocial() || !newp->GetSocial()->HasIgnore(guid))
+    PlayerSocial* social = newp->GetSocial();
+    if (!social || !social->HasIgnore(guid))
     {
         WorldPacket data;
         MakeInvite(&data, guid);
@@ -930,17 +931,33 @@ void Channel::SetOwner(ObjectGuid guid, bool exclaim)
 void Channel::SendToAll(WorldPacket* data, ObjectGuid guid)
 {
     for (PlayerContainer::const_iterator i = playersStore.begin(); i != playersStore.end(); ++i)
-        if (Player* player = i->second.plrPtr)
-            if (!guid || !player->GetSocial() || !player->GetSocial()->HasIgnore(guid))
-                player->SendDirectMessage(data);
+    {
+        Player* player = ObjectAccessor::FindConnectedPlayer(i->first);
+        if (!player || !player->GetSession())
+            continue;
+
+        if (guid)
+        {
+            PlayerSocial* social = player->GetSocial();
+            if (social && social->HasIgnore(guid))
+                continue;
+        }
+
+        player->SendDirectMessage(data);
+    }
 }
 
 void Channel::SendToAllButOne(WorldPacket* data, ObjectGuid who)
 {
     for (PlayerContainer::const_iterator i = playersStore.begin(); i != playersStore.end(); ++i)
-        if (Player* player = i->second.plrPtr)
-            if (i->first != who)
+    {
+        if (i->first == who)
+            continue;
+
+        if (Player* player = ObjectAccessor::FindConnectedPlayer(i->first))
+            if (player->GetSession())
                 player->SendDirectMessage(data);
+    }
 }
 
 void Channel::SendToOne(WorldPacket* data, ObjectGuid who)
