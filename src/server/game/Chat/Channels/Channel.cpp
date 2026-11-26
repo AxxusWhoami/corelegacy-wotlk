@@ -703,6 +703,9 @@ void Channel::SendWhoOwner(ObjectGuid guid)
 
 void Channel::List(Player const* player)
 {
+    if (!player || !player->GetSession())
+        return;
+
     ObjectGuid guid = player->GetGUID();
 
     if (!IsOn(guid))
@@ -723,19 +726,26 @@ void Channel::List(Player const* player)
     data << uint32(0);                                  // size of list, placeholder
 
     uint32 gmLevelInWhoList = sWorld->getIntConfig(CONFIG_GM_LEVEL_IN_WHO_LIST);
+    bool const canSeeAllSecLevels = player->GetSession()->HasPermission(rbac::RBAC_PERM_WHO_SEE_ALL_SEC_LEVELS);
 
-    uint32 count  = 0;
+    uint32 count = 0;
     if (!(_channelRights.flags & CHANNEL_RIGHT_CANT_SPEAK))
+    {
         for (PlayerContainer::const_iterator i = playersStore.begin(); i != playersStore.end(); ++i)
-            if (Player* member = i->second.plrPtr)
-                if ((player->GetSession()->HasPermission(rbac::RBAC_PERM_WHO_SEE_ALL_SEC_LEVELS) ||
-                     member->GetSession()->GetSecurity() <= AccountTypes(gmLevelInWhoList)) &&
-                    member->IsVisibleGloballyFor(player))
-                {
-                    data << i->first;
-                    data << uint8(i->second.flags); // flags seems to be changed...
-                    ++count;
-                }
+        {
+            Player* member = ObjectAccessor::FindConnectedPlayer(i->first);
+            if (!member || !member->GetSession())
+                continue;
+
+            if ((canSeeAllSecLevels || member->GetSession()->GetSecurity() <= AccountTypes(gmLevelInWhoList)) &&
+                member->IsVisibleGloballyFor(player))
+            {
+                data << i->first;
+                data << uint8(i->second.flags);
+                ++count;
+            }
+        }
+    }
 
     data.put<uint32>(pos, count);
 
@@ -808,10 +818,11 @@ void Channel::Say(ObjectGuid guid, std::string const& what, uint32 lang)
         return;
     }
 
-    Player* player = pinfo.plrPtr;
+    // Resolver siempre vía ObjectAccessor en lugar de confiar en pinfo.plrPtr
+    Player* player = ObjectAccessor::FindConnectedPlayer(guid);
     WorldPacket data;
 
-    if (player)
+    if (player && player->GetSession())
     {
         ChatHandler::BuildChatPacket(data, CHAT_MSG_CHANNEL, Language(lang), player, player, what, 0, _name);
     }
@@ -930,6 +941,9 @@ void Channel::SetOwner(ObjectGuid guid, bool exclaim)
 
 void Channel::SendToAll(WorldPacket* data, ObjectGuid guid)
 {
+    if (!data)
+        return;
+
     for (PlayerContainer::const_iterator i = playersStore.begin(); i != playersStore.end(); ++i)
     {
         Player* player = ObjectAccessor::FindConnectedPlayer(i->first);
@@ -949,6 +963,9 @@ void Channel::SendToAll(WorldPacket* data, ObjectGuid guid)
 
 void Channel::SendToAllButOne(WorldPacket* data, ObjectGuid who)
 {
+    if (!data)
+        return;
+
     for (PlayerContainer::const_iterator i = playersStore.begin(); i != playersStore.end(); ++i)
     {
         if (i->first == who)
@@ -962,14 +979,21 @@ void Channel::SendToAllButOne(WorldPacket* data, ObjectGuid who)
 
 void Channel::SendToOne(WorldPacket* data, ObjectGuid who)
 {
+    if (!data)
+        return;
+
     if (Player* player = ObjectAccessor::FindConnectedPlayer(who))
-        player->SendDirectMessage(data);
+        if (player->GetSession())
+            player->SendDirectMessage(data);
 }
 
 void Channel::SendToAllWatching(WorldPacket* data)
 {
+    if (!data)
+        return;
+
     for (PlayersWatchingContainer::const_iterator i = playersWatchingStore.begin(); i != playersWatchingStore.end(); ++i)
-        if (*i)
+        if (*i && (*i)->GetSession())
             (*i)->SendDirectMessage(data);
 }
 

@@ -5887,6 +5887,9 @@ void Player::SendMessageToSet(WorldPacket const* data, Player const* skipped_rcv
 
 void Player::SendDirectMessage(WorldPacket const* data) const
 {
+    if (!m_session || !data)
+        return;
+
     m_session->SendPacket(data);
 }
 
