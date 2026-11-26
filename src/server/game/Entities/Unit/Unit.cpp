@@ -8027,15 +8027,21 @@ void Unit::RemoveAllControlled(bool onDeath /*= false*/)
     if (IsPlayer())
         ToPlayer()->StopCastingCharm();
 
+    std::set<Unit*> processed;
     for (auto it = m_Controlled.begin(); it != m_Controlled.end();)
     {
         Unit* target = *it;
-        ++it;
+        if (!processed.insert(target).second)
+        {
+            ++it;
+            continue;
+        }
 
         if (target->GetCharmerGUID() == GetGUID())
         {
-            m_Controlled.erase(target);
+            m_Controlled.erase(it);
             target->RemoveCharmAuras();
+            it = m_Controlled.begin();
         }
         else if (target->GetOwnerGUID() == GetGUID() && target->IsSummon())
         {
@@ -8043,15 +8049,26 @@ void Unit::RemoveAllControlled(bool onDeath /*= false*/)
             if (onDeath)
                 if (TempSummon* ts = target->ToTempSummon())
                     if (ts->m_Properties && ts->m_Properties->Type == SUMMON_TYPE_LIGHTWELL)
+                    {
+                        ++it;
                         continue;
+                    }
 
             if (!(onDeath && !IsPlayer() && target->IsGuardian()))
+            {
                 target->ToTempSummon()->UnSummon();
+                it = m_Controlled.begin();
+            }
+            else
+            {
+                ++it;
+            }
         }
         else
         {
             LOG_ERROR("entities.unit", "Unit {} is trying to release unit {} which is neither charmed nor owned by it", GetEntry(), target->GetEntry());
-            m_Controlled.erase(target);
+            m_Controlled.erase(it);
+            it = m_Controlled.begin();
         }
     }
 }
