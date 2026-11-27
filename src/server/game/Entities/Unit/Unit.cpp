@@ -12289,12 +12289,23 @@ void Unit::RemoveFromWorld()
             ABORT();
         }
 
-        if (Unit* owner = GetOwner())
+        Unit* owner = GetOwner();
+        if (!owner && GetOwnerGUID().IsPlayer())
+        {
+            if (Player* pOwner = ObjectAccessor::FindConnectedPlayer(GetOwnerGUID()))
+                if (!pOwner->IsInWorld() || pOwner->FindMap() == FindMap())
+                    owner = pOwner;
+        }
+
+        if (owner)
         {
             if (owner->m_Controlled.find(this) != owner->m_Controlled.end())
             {
                 if (HasUnitTypeMask(UNIT_MASK_MINION | UNIT_MASK_GUARDIAN))
                     owner->SetMinion((Minion*)this, false);
+                else
+                    owner->m_Controlled.erase(this);
+
                 LOG_INFO("entities.unit", "Unit {} is in controlled list of {} when removed from world", GetEntry(), owner->GetEntry());
                 //ABORT();
             }

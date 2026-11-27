@@ -383,6 +383,12 @@ void Minion::RemoveFromWorld()
 
     if (Unit* owner = GetOwner())
         owner->SetMinion(this, false);
+    else if (m_owner.IsPlayer())
+    {
+        if (Player* owner = ObjectAccessor::FindConnectedPlayer(m_owner))
+            if (!owner->IsInWorld() || owner->FindMap() == FindMap())
+                owner->SetMinion(this, false);
+    }
 
     TempSummon::RemoveFromWorld();
 }
