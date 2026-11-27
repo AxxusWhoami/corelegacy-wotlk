@@ -64,7 +64,11 @@ bool ScriptMgr::CanPacketReceive(WorldSession* session, WorldPacket const& packe
 
 void ScriptMgr::OnPacketSent(WorldSession* session, WorldPacket const& packet)
 {
-    ASSERT(session);
+    if (!session)
+    {
+        LOG_ERROR("server.worldserver", "ScriptMgr::OnPacketSent called with null session (opcode: 0x{:X})", packet.GetOpcode());
+        return;
+    }
 
     CALL_ENABLED_HOOKS(ServerScript, SERVERHOOK_ON_PACKET_SENT, script->OnPacketSent(session, packet));
 }
